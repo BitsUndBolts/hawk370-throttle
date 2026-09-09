@@ -1,0 +1,1013 @@
+<!--
+  Copyright (c) 2026 Alexander Fuchs / Bits Und Bolts
+  Licensed under the MIT License.
+-->
+
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>HAWK 370 · Throttle Control</title>
+  <script src="hawk370.js"></script>
+  <link rel="stylesheet" href="hawk370.css">
+  <style>
+    :root {
+      --accent-solid-dim: #b8850a; /* solid (non-alpha) dim amber, for the readout unit/sub text */
+    }
+
+    .card-header { justify-content: space-between; }
+    .header-right-group { display: flex; align-items: center; gap: 1.2em; margin-left: auto; }
+    .header-right-group .icon-btn { margin-left: 0; }
+
+    /* ── CPU CONFIGURATION PANEL ── */
+    .panel { border: 1px solid var(--border); padding: 1.4em 1.6em; }
+    .panel + .panel { border-top: none; }
+
+    .cpu-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+      gap: 1.2em;
+      flex-wrap: wrap;
+    }
+
+    .select-wrap {
+      position: relative;
+      border: 1px solid var(--border-bright);
+      background: var(--panel-2);
+      flex: 1;
+      min-width: 14em;
+    }
+    .select-wrap::after {
+      content: "▾";
+      position: absolute;
+      right: 0.8em; top: 50%;
+      transform: translateY(-50%);
+      color: var(--text-3);
+      pointer-events: none;
+      font-size: 0.9em;
+      transition: transform 0.15s, color 0.15s;
+    }
+    .select-wrap.open::after { transform: translateY(-50%) rotate(180deg); color: var(--accent); }
+
+    .select-trigger {
+      appearance: none;
+      -webkit-appearance: none;
+      background: transparent;
+      border: none;
+      color: var(--text);
+      font-family: var(--mono);
+      font-size: 1.05em;
+      padding: 0.75em 2.2em 0.75em 1em;
+      width: 100%;
+      text-align: left;
+      cursor: pointer;
+      display: block;
+    }
+    .select-trigger:focus-visible { outline: 1px dashed var(--accent); outline-offset: -2px; }
+    .select-wrap.open .select-trigger { color: var(--accent); }
+
+    .select-menu {
+      position: absolute;
+      z-index: 20;
+      top: calc(100% + 0.4em);
+      left: 0;
+      right: 0;
+      background: var(--panel-2);
+      border: 1px solid var(--border-bright);
+      box-shadow: 0 0.8em 2em rgba(0, 0, 0, 0.5);
+      max-height: 14em;
+      overflow-y: auto;
+      scrollbar-width: thin;
+      scrollbar-color: var(--border-bright) transparent;
+    }
+    .select-menu.hidden { display: none; }
+
+    .select-option {
+      padding: 0.65em 1em;
+      font-family: var(--mono);
+      font-size: 1.05em;
+      color: var(--text-2);
+      cursor: pointer;
+      border-bottom: 1px solid var(--border);
+      transition: background 0.1s, color 0.1s;
+    }
+    .select-option:last-child { border-bottom: none; }
+    .select-option:hover { background: rgba(255, 255, 255, 0.04); color: var(--text); }
+    .select-option.selected { background: var(--accent-dim); color: var(--accent); }
+
+    .mhz-field { display: flex; flex-direction: column; gap: 0.4em; }
+    .mhz-field label {
+      font-family: var(--mono);
+      font-size: 0.8em;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--text-3);
+    }
+    .mhz-input-wrap { position: relative; width: 9em; }
+    .mhz-input-wrap input {
+      background: var(--panel-2);
+      border: 1px solid var(--border-bright);
+      color: var(--text);
+      font-family: var(--mono);
+      font-size: 1.05em;
+      padding: 0.7em 2em 0.7em 0.9em;
+      width: 100%;
+      appearance: textfield;
+      -moz-appearance: textfield;
+    }
+    .mhz-input-wrap input::-webkit-outer-spin-button,
+    .mhz-input-wrap input::-webkit-inner-spin-button {
+      -webkit-appearance: none;
+      margin: 0;
+    }
+    .mhz-input-wrap input:focus { outline: 1px dashed var(--accent); outline-offset: 2px; }
+
+    .mhz-steppers {
+      position: absolute;
+      right: 1px; top: 1px; bottom: 1px;
+      width: 1.8em;
+      display: flex;
+      flex-direction: column;
+      border-left: 1px solid var(--border-bright);
+    }
+    .mhz-step {
+      flex: 1;
+      background: none;
+      border: none;
+      cursor: pointer;
+      color: var(--text-3);
+      font-size: 0.65em;
+      line-height: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: color 0.15s, background 0.15s;
+    }
+    .mhz-step:first-child { border-bottom: 1px solid var(--border-bright); }
+    .mhz-step:hover { color: var(--accent); background: var(--accent-dim); }
+    .mhz-step:active { color: var(--accent); }
+
+    .calib-warning {
+      display: none;
+      align-items: flex-start;
+      gap: 0.8em;
+      margin-top: 1.2em;
+      padding: 0.9em 1.1em;
+      background: var(--red-dim);
+      border: 1px solid rgba(255, 92, 92, 0.25);
+      color: var(--red);
+      font-size: 0.95em;
+      line-height: 1.5;
+    }
+    .calib-warning.visible { display: flex; }
+    .calib-warning svg { width: 1.3em; height: 1.3em; flex-shrink: 0; margin-top: 0.1em; }
+
+    /* ── THROTTLE READOUT + SLIDER ── */
+    .readout-panel { text-align: center; padding-top: 1.8em; padding-bottom: 0.6em; }
+    .readout {
+      font-family: var(--font-display);
+      font-size: 5.5em;
+      line-height: 1;
+      color: var(--accent);
+      text-shadow: 0 0 10px var(--accent-glow), 0 0 2px rgba(255, 176, 0, 0.6);
+      letter-spacing: 0.02em;
+    }
+    .readout .unit { font-size: 0.4em; color: var(--accent-solid-dim); margin-left: 0.15em; }
+    .readout-sub { font-family: var(--mono); font-size: 0.85em; color: var(--text-3); margin-top: 0.6em; letter-spacing: 0.03em; }
+    .readout-sub .approx { color: var(--accent-solid-dim); }
+
+    /* ── EDITABLE MHZ READOUT ──  */
+    .readout-value-wrap {
+      display: inline-block;
+      cursor: pointer;
+      border-bottom: 1px dashed transparent;
+      transition: border-color 0.15s;
+    }
+    .readout-value-wrap:hover { border-bottom-color: var(--accent-glow); }
+    .readout-input {
+      font: inherit;
+      color: inherit;
+      text-shadow: inherit;
+      letter-spacing: inherit;
+      background: transparent;
+      border: none;
+      border-bottom: 1px dashed var(--accent);
+      outline: none;
+      width: 5ch;
+      text-align: right;
+      -moz-appearance: textfield;
+      appearance: textfield;
+    }
+    .readout-input::-webkit-outer-spin-button,
+    .readout-input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+    #speed-slider {
+      width: 100%;
+    }
+
+    .slider-block { margin-top: 1.8em; padding: 0 0.3em; }
+
+    input[type="range"] { -webkit-appearance: none; appearance: none; flex: 1; height: 1.4em; background: transparent; cursor: pointer; }
+    input[type="range"]::-webkit-slider-runnable-track { height: 0.7em; background: var(--panel-2); border: 1px solid var(--border-bright); }
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none; width: 1.1em; height: 1.5em; margin-top: -0.45em;
+      background: var(--accent); border: 1px solid var(--accent);
+      box-shadow: 0 0 6px var(--accent-glow); cursor: pointer;
+    }
+    input[type="range"]::-moz-range-track { height: 0.7em; background: var(--panel-2); border: 1px solid var(--border-bright); }
+    input[type="range"]::-moz-range-thumb {
+      width: 1.1em; height: 1.5em; background: var(--accent); border: 1px solid var(--accent);
+      box-shadow: 0 0 6px var(--accent-glow); cursor: pointer; border-radius: 0;
+    }
+
+    .slider-endpoints { display: flex; justify-content: space-between; font-size: 0.75em; color: var(--text-3); margin-top: 0.5em; /*padding-left: 4.2em;*/ }
+
+    /* ── POWER RAILS ── */
+    .volt-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.2em; }
+    .volt-card { border: 1px solid var(--border); padding: 0.9em 0.9em 0.7em; background: var(--panel-2); }
+    .volt-name { font-family: var(--mono); font-size: 0.8em; color: var(--text-3); letter-spacing: 0.08em; text-transform: uppercase; display: flex; justify-content: space-between; }
+    .volt-name .tag { color: var(--blue); }
+    .volt-value { font-family: var(--font-display); font-size: 2.2em; color: var(--accent); margin: 0.2em 0 0.5em; text-shadow: 0 0 6px var(--accent-glow); }
+    .volt-value .v { font-size: 0.5em; color: var(--accent-solid-dim); }
+
+    svg.spark { display: block; width: 100%; height: 2.6em; overflow: visible; }
+    .spark-grid-line { stroke: var(--border); stroke-width: 1; }
+    .spark-line { fill: none; stroke: var(--blue); stroke-width: 1.5; }
+    .spark-fill { fill: rgba(95, 211, 211, 0.08); stroke: none; }
+
+    /* ── DEVICE CONTROLS (ported from AirMeter) ── */
+    .controls-section { padding: 0 1.2em 0.8em; }
+    .control-row {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 1.2em 1.4em; background: var(--panel-2); border: 1px solid var(--border);
+      border-radius: 0.4em; gap: 1.2em; margin-bottom: 0.8em;
+    }
+    .control-row button { width: 7em; }
+    .control-info  { flex: 1; min-width: 0; }
+    .control-title { font-size: 1.3em; font-weight: 600; color: var(--text-2); margin-bottom: 0.15em; }
+    .control-desc  { font-size: 1.1em; color: var(--text-3); line-height: 1.4; }
+
+    /* ── FOOTER: SIGNAL BARS / STORAGE / WI-FI POWER TOGGLE (ported) ── */
+    .signal-bars { display: inline-flex; align-items: flex-end; gap: 0.2em; vertical-align: -0.1em; }
+    .signal-bars span { display: block; width: 0.35em; background: var(--text-3); border-radius: 0.1em; transition: background 0.2s; }
+    .signal-bars span.lit { background: var(--text); }
+    .signal-bars span:nth-child(1) { height: 0.25em; }
+    .signal-bars span:nth-child(2) { height: 0.5em; }
+    .signal-bars span:nth-child(3) { height: 0.75em; }
+    .signal-bars span:nth-child(4) { height: 1em; }
+
+    .storage-wrapper { display: inline-flex; align-items: center; padding-top: 0.05em; }
+    .storage-text {
+      position: relative; z-index: 2; font-size: 0.9em; color: var(--text); pointer-events: none;
+      white-space: nowrap; -webkit-text-stroke: 0.2em var(--panel); paint-order: stroke fill;
+    }
+    .storage-bar-track {
+      position: relative; display: flex; align-items: center; justify-content: center;
+      width: 12em; height: 1.7em; background-color: var(--text-3); border-radius: 4px; overflow: hidden;
+    }
+    .storage-progress-fill {
+      position: absolute; top: 0; left: 0; height: 100%; background-color: var(--accent);
+      width: 0%; transition: width 0.3s ease-in-out; z-index: 1;
+    }
+
+    .freq-toggle { display: inline-flex; align-items: center; border: 1px solid var(--border-bright); border-radius: 0.25em; overflow: hidden; }
+    .freq-btn {
+      min-width: 3.4em; font-family: var(--mono); font-size: 1em; font-weight: 600; letter-spacing: 0.04em;
+      padding: 0.15em 0.55em; background: none; border: none; cursor: pointer; color: var(--text-3);
+      transition: color 0.15s, background 0.15s; line-height: 1.4;
+    }
+    .freq-btn + .freq-btn { border-left: 1px solid var(--border-bright); }
+    .freq-btn.active { color: var(--accent); background: var(--accent-dim); }
+    .freq-btn.pending { color: var(--yellow); cursor: wait; }
+    .freq-btn:not(.active):not(.pending):hover { color: var(--text-2); background: rgba(255, 255, 255, 0.04); }
+    .footer-val.cpu-val { padding-top: 0; }
+
+    /* ── RESPONSIVE ── */
+    @media (max-width: 480px) {
+      .readout { font-size: 3.6em; }
+      .volt-grid { grid-template-columns: 1fr; }
+      .cpu-row { align-items: flex-start; }
+    }
+  </style>
+</head>
+
+<body>
+
+  <main class="card">
+
+    <!-- ── HEADER ── -->
+    <div class="card-header">
+      <div class="header-badge">
+        <img src="hawk370.webp" alt="HAWK 370 Logo" class="header-logo">
+        <span class="header-title">Throttle Control</span>
+      </div>
+      <div class="header-right-group">
+        <div class="header-right">
+          <span class="header-tag">FIRMWARE</span>
+          <span class="version-pill"><span id="firmware_version"><span class="spinner-inline warning" style="margin:0"></span></span></span>
+        </div>
+        <a class="icon-btn" href="/files" title="Files / OTA Update">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+            <polyline points="17 8 12 3 7 8"/>
+            <line x1="12" y1="3" x2="12" y2="15"/>
+          </svg>
+        </a>
+      </div>
+    </div>
+
+    <!-- ── CPU CONFIGURATION ── -->
+    <div class="section-label">CPU Configuration</div>
+    <div class="panel">
+      <div class="cpu-row">
+        <div class="select-wrap" id="cpu-select">
+          <button type="button" class="select-trigger" id="cpu-select-trigger" aria-haspopup="listbox" aria-expanded="false">
+            <span id="cpu-select-label">—</span>
+          </button>
+          <div class="select-menu hidden" id="cpu-select-menu" role="listbox"></div>
+        </div>
+        <div class="mhz-field">
+          <label for="base-mhz">Base Clock (MHz)</label>
+          <div class="mhz-input-wrap">
+            <input type="number" id="base-mhz" min="1" max="9999" step="1" inputmode="numeric" autocomplete="off">
+            <div class="mhz-steppers">
+              <button type="button" class="mhz-step" id="mhz-up" tabindex="-1" aria-label="Increase base clock">▲</button>
+              <button type="button" class="mhz-step" id="mhz-down" tabindex="-1" aria-label="Decrease base clock">▼</button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="calib-warning" id="calib-warning">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+          <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+        </svg>
+        <span>This family hasn't been bench-calibrated yet — carrier frequency and minimum pulse width are placeholder values. Verify on a scope before relying on this setting.</span>
+      </div>
+    </div>
+
+    <!-- ── THROTTLE READOUT + SLIDER ── -->
+    <div class="panel readout-panel">
+      <div class="readout"><span class="readout-value-wrap" id="readout-value-wrap" title="Click to enter a target MHz"><span id="readout-value">0</span></span><span class="unit">MHz</span></div>
+      <div class="readout-sub"><span class="approx">≈ approx.</span> <span id="readout-sub-pct">0%</span> of base clock</div>
+
+      <div class="slider-block">
+        <input type="range" id="speed-slider" min="0" max="9999" step="1" value="100">
+        <div class="slider-endpoints">
+          <span>0 MHz — stopped</span>
+          <span id="slider-max-label">100 MHz — full speed</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── POWER RAILS ── -->
+    <div class="section-label">Power Rails</div>
+    <div class="panel">
+      <div class="volt-grid">
+
+        <div class="volt-card">
+          <div class="volt-name">VCORE <span class="tag">●</span></div>
+          <div class="volt-value"><span id="vcore-value">--</span><span class="v">V</span></div>
+          <svg class="spark" viewBox="0 0 200 40" preserveAspectRatio="none">
+            <line class="spark-grid-line" x1="0" y1="20" x2="200" y2="20"/>
+            <polygon class="spark-fill" id="vcore-spark-fill" points=""/>
+            <polyline class="spark-line" id="vcore-spark-line" points=""/>
+          </svg>
+        </div>
+
+        <div class="volt-card">
+          <div class="volt-name">VTT <span class="tag">●</span></div>
+          <div class="volt-value"><span id="vtt-value">--</span><span class="v">V</span></div>
+          <svg class="spark" viewBox="0 0 200 40" preserveAspectRatio="none">
+            <line class="spark-grid-line" x1="0" y1="20" x2="200" y2="20"/>
+            <polygon class="spark-fill" id="vtt-spark-fill" points=""/>
+            <polyline class="spark-line" id="vtt-spark-line" points=""/>
+          </svg>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- ── CONTROLS ── -->
+    <div class="section-label">Device Controls</div>
+    <div class="controls-section">
+
+      <div class="control-row">
+        <div class="control-info">
+          <div class="control-title">Restart</div>
+          <div class="control-desc">Reboot the device - all settings are kept</div>
+        </div>
+        <button class="btn btn-md btn-outline-warning" onclick="openRestartModal()">Restart</button>
+      </div>
+
+      <div class="control-row">
+        <div class="control-info">
+          <div class="control-title">Reset Wi-Fi</div>
+          <div class="control-desc">Erase saved network &amp; reboot into setup mode</div>
+        </div>
+        <button class="btn btn-md btn-outline-danger" onclick="openResetModal()">Reset</button>
+      </div>
+
+    </div>
+
+    <!-- ── FOOTER ── -->
+    <div class="card-footer">
+      <div class="footer-kv">
+        <div class="footer-item">
+          <span class="footer-key">Host</span>
+          <span class="footer-val"><a href="http://hawk370.local/">hawk370.local</a></span>
+        </div>
+        <div class="footer-item">
+          <span class="footer-key">IP Address</span>
+          <span class="footer-val"><a id="ip_address" href=""></a></span>
+        </div>
+        <div class="footer-item">
+          <span class="footer-key">SSID</span>
+          <span class="footer-val"><span id="ssid"></span> <span id="wifi-bars" class="signal-bars"></span></span>
+        </div>
+        <div class="footer-item">
+          <span class="footer-key">Module</span>
+          <span class="footer-val"><span id="esp_model">ESP32</span></span>
+        </div>
+        <div class="footer-item">
+          <span class="footer-key">Memory</span>
+          <span class="footer-val"><span id="free_memory"></span></span>
+        </div>
+        <div class="footer-item">
+          <span class="footer-key">Temp</span>
+          <span class="footer-val"><span id="esp_temp">—</span></span>
+        </div>
+        <div class="footer-item" id="wifi-power-item">
+          <span class="footer-key">Wi-Fi Power</span>
+          <span class="footer-val cpu-val">
+            <span class="freq-toggle" id="ps-toggle">
+              <button class="freq-btn" id="ps-on"  onclick="setWifiPs(true)"  title="Power saving ON - lower temperature, higher latency">Eco</button>
+              <button class="freq-btn" id="ps-off" onclick="setWifiPs(false)" title="Power saving OFF - higher temperature, lower latency">Max</button>
+            </span>
+          </span>
+        </div>
+        <div class="footer-item">
+          <span class="footer-key">Storage</span>
+          <span class="footer-val storage-wrapper" title="Loading layout...">
+            <span class="storage-bar-track">
+              <span id="storage-progress" class="storage-progress-fill"></span>
+              <span id="storage_text" class="storage-text">Loading...</span>
+            </span>
+          </span>
+        </div>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- ── RESET MODAL (ported from AirMeter) ── -->
+  <div class="modal-overlay" id="modal-overlay">
+    <div class="modal" id="modal-box">
+      <div id="step-confirm">
+        <div class="modal-header">
+          <div class="modal-icon danger">
+            <svg viewBox="0 0 14 14" fill="none">
+              <path d="M7 2v5M7 10v.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
+              <circle cx="7" cy="7" r="6" stroke="currentColor" stroke-width="1.2" />
+            </svg>
+          </div>
+          <span class="modal-title danger">Confirm Wi-Fi Reset</span>
+        </div>
+        <div class="modal-body">
+          <p>This will <strong>erase the saved network credentials</strong> and reboot the device into setup mode. You will need to configure a new network connection.</p>
+          <div class="modal-actions">
+            <button class="btn-cancel" onclick="closeResetModal()">Cancel</button>
+            <button class="btn-confirm danger" onclick="executeReset()">Reset</button>
+          </div>
+        </div>
+      </div>
+
+      <div id="step-resetting" class="hidden">
+        <div class="modal-header">
+          <div class="modal-icon danger">
+            <span class="spinner-inline" style="margin:0"></span>
+          </div>
+          <span class="modal-title danger">Wiping Credentials...</span>
+        </div>
+        <div class="modal-body">
+          <p>Device is rebooting. Follow these steps to reconnect:</p>
+          <div class="reset-steps">
+            <div class="step-row">
+              <div class="step-num">1</div>
+              <div class="step-text">Open Wi-Fi settings on your phone or computer.</div>
+            </div>
+            <div class="step-row">
+              <div class="step-num">2</div>
+              <div class="step-text">Connect to hotspot: <strong>HAWK370-Setup</strong></div>
+            </div>
+            <div class="step-row">
+              <div class="step-num">3</div>
+              <div class="step-text">Visit <a href="http://hawk370.local">hawk370.local</a> to run setup again.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── RESTART MODAL (ported from AirMeter) ── -->
+  <div class="modal-overlay" id="restart-modal-overlay">
+    <div class="modal" id="restart-modal-box">
+      <div id="restart-step-confirm">
+        <div class="modal-header">
+          <div class="modal-icon warning">
+            <svg viewBox="0 0 14 14" fill="none">
+              <path d="M11 7A4 4 0 1 1 7 3M7 1v3l2-1.5L7 1" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </div>
+          <span class="modal-title warning">Restart Device</span>
+        </div>
+        <div class="modal-body">
+          <p>The device will restart. Your network credentials and throttle settings are <strong>kept intact</strong>.</p>
+          <div class="modal-actions">
+            <button class="btn-cancel" onclick="closeRestartModal()">Cancel</button>
+            <button class="btn-confirm warning" onclick="executeRestart()">Restart</button>
+          </div>
+        </div>
+      </div>
+
+      <div id="restart-step-restarting" class="hidden">
+        <div class="modal-header">
+          <div class="modal-icon warning">
+            <span class="spinner-inline" style="margin:0"></span>
+          </div>
+          <span class="modal-title warning">Restarting...</span>
+        </div>
+        <div class="modal-body">
+          <p>The device is restarting. Please wait...</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script>
+    /* ── THROTTLE: CPU FAMILY / BASE MHZ / SPEED SLIDER ─────────────────── */
+    let cpuFamilies     = [];
+    let selectedFamily  = null;
+    let cpuMenuOpen     = false;
+    let baseMhzCache    = 300;
+    let speedSendTimer  = null;
+
+    // targetMhz is the single source of truth for "what speed is commanded"
+    // in this UI. The wire format is still speedPercent (0-100, now a
+    // float — see /api/throttle/speed) so we convert both ways rather than
+    // storing percent as the source of truth, since the whole point of this
+    // UI is to let people think and type in MHz, not percent.
+    let targetMhz = 0;
+
+    function clampMhz(mhz) {
+      if (!Number.isFinite(mhz)) mhz = 0;
+      return Math.min(baseMhzCache, Math.max(0, Math.round(mhz)));
+    }
+
+    // Repaints the big number + the "≈ approx. NN% of base clock" line and
+    // the slider position from the current targetMhz/baseMhzCache. Does
+    // NOT talk to the device — call sendSpeedMhz() separately for that.
+    function updateReadoutDisplay() {
+      const valEl = $('readout-value');
+      if (valEl) valEl.textContent = targetMhz; // null while the click-to-edit input is open
+
+      const pct = baseMhzCache > 0 ? (targetMhz / baseMhzCache * 100) : 0;
+      $('readout-sub-pct').textContent = pct.toFixed(1) + '%';
+
+      const slider = $('speed-slider');
+      slider.max   = baseMhzCache;
+      slider.value = targetMhz;
+      $('slider-max-label').textContent = `${baseMhzCache} MHz — full speed`;
+    }
+
+    // Sets the commanded target (clamped to [0, baseMhzCache]), repaints,
+    // and optionally pushes it to the device as a speedPercent float.
+    function setTargetMhz(mhz, send, immediate) {
+      let newMhzValue = clampMhz(mhz);
+      if (newMhzValue === targetMhz) return;
+
+      targetMhz = newMhzValue;
+      updateReadoutDisplay();
+      if (send) sendSpeedMhz(immediate);
+    }
+
+    function sendSpeedMhz(immediate) {
+      const speedPercent = baseMhzCache > 0 ? (targetMhz / baseMhzCache * 100) : 0;
+      clearTimeout(speedSendTimer);
+      const doSend = () => {
+        fetch('/api/throttle/speed', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ speedPercent })
+        }).catch(() => showToast('Failed to set speed', 'fail'));
+      };
+      if (immediate) doSend();
+      else speedSendTimer = setTimeout(doSend, 150);
+    }
+
+    /* ── CLICK-TO-EDIT MHZ READOUT (same pattern as file rename in files.html) ── */
+    function startMhzEdit() {
+      const wrap = $('readout-value-wrap');
+      wrap.innerHTML = `<input type="number" id="mhz-edit-input" class="readout-input"
+                                min="0" max="${baseMhzCache}" step="1" value="${targetMhz}">`;
+      const input = $('mhz-edit-input');
+      input.addEventListener('keydown', e => {
+        if (e.key === 'Enter')  { e.preventDefault(); input.blur(); }
+        if (e.key === 'Escape') { input.dataset.cancel = '1'; input.blur(); }
+      });
+      input.addEventListener('blur', () => {
+        if (input.dataset.cancel === '1') { renderReadoutValue(); return; }
+        commitMhzEdit(input.value);
+      });
+      input.focus();
+      input.select();
+    }
+
+    function commitMhzEdit(rawValue) {
+      const parsed = parseFloat(rawValue);
+      setTargetMhz(Number.isFinite(parsed) ? parsed : targetMhz, true, true);
+      renderReadoutValue();
+    }
+
+    function renderReadoutValue() {
+      $('readout-value-wrap').innerHTML = `<span id="readout-value">${targetMhz}</span>`;
+    }
+
+    $('readout-value-wrap').addEventListener('click', startMhzEdit);
+
+    /* ── SPEED SLIDER (drags in whole MHz, converted to speedPercent on send) ── */
+    $('speed-slider').addEventListener('input', () => {
+      setTargetMhz(parseInt($('speed-slider').value, 10), true, false);
+    });
+    $('speed-slider').addEventListener('change', () => {
+      setTargetMhz(parseInt($('speed-slider').value, 10), true, false);
+    });
+
+    function renderCalibWarning(calibrated) {
+      $('calib-warning').classList.toggle('visible', !calibrated);
+    }
+
+    /* ── CUSTOM CPU-FAMILY DROPDOWN ─────────────────────────────────────
+       Replaces a native <select> so the open menu can actually be themed
+       (browsers won't let CSS touch a native option list's colors/fonts). */
+    function renderCpuMenu() {
+      const menu = $('cpu-select-menu');
+      menu.innerHTML = cpuFamilies.map(f => `
+        <div class="select-option${f.id === selectedFamily ? ' selected' : ''}" data-id="${f.id}" role="option" aria-selected="${f.id === selectedFamily}">
+          ${escH(f.name)}
+        </div>
+      `).join('');
+      menu.querySelectorAll('.select-option').forEach(opt => {
+        opt.addEventListener('click', () => {
+          selectCpuFamily(parseInt(opt.dataset.id, 10));
+          closeCpuMenu();
+        });
+      });
+    }
+
+    function selectCpuFamily(id) {
+      selectedFamily = id;
+      const fam = cpuFamilies.find(f => f.id === id);
+      $('cpu-select-label').textContent = fam ? fam.name : '—';
+      renderCpuMenu();
+      sendConfig();
+    }
+
+    function openCpuMenu() {
+      $('cpu-select-menu').classList.remove('hidden');
+      $('cpu-select').classList.add('open');
+      $('cpu-select-trigger').setAttribute('aria-expanded', 'true');
+      cpuMenuOpen = true;
+    }
+
+    function closeCpuMenu() {
+      $('cpu-select-menu').classList.add('hidden');
+      $('cpu-select').classList.remove('open');
+      $('cpu-select-trigger').setAttribute('aria-expanded', 'false');
+      cpuMenuOpen = false;
+    }
+
+    $('cpu-select-trigger').addEventListener('click', () => {
+      cpuMenuOpen ? closeCpuMenu() : openCpuMenu();
+    });
+    document.addEventListener('click', e => {
+      if (cpuMenuOpen && !$('cpu-select').contains(e.target)) closeCpuMenu();
+    });
+    document.addEventListener('keydown', e => {
+      if (e.key === 'Escape' && cpuMenuOpen) closeCpuMenu();
+    });
+
+    function loadCpuFamilies() {
+      return fetch('/api/cpu-families')
+        .then(r => r.json())
+        .then(list => {
+          cpuFamilies = list;
+          renderCpuMenu();
+        })
+        .catch(() => {});
+    }
+
+    function loadThrottleStatus() {
+      return fetch('/api/throttle')
+        .then(r => r.json())
+        .then(data => {
+          selectedFamily = data.family;
+          const fam = cpuFamilies.find(f => f.id === data.family);
+          $('cpu-select-label').textContent = fam ? fam.name : data.familyName || '—';
+          renderCpuMenu();
+
+          $('base-mhz').value = data.baseMhz;
+          baseMhzCache = data.baseMhz;
+
+          targetMhz = clampMhz(data.baseMhz * (data.speedPercent / 100));
+          updateReadoutDisplay();
+
+          renderCalibWarning(data.calibrated);
+        })
+        .catch(() => {});
+    }
+
+    // Base clock (and/or CPU family) changed. The firmware's
+    // /api/throttle/config endpoint only stores family/baseMhz — it
+    // re-arms the modulator at the *existing* speedPercent, it does not
+    // recompute one. That's fine when the UI's source of truth is percent,
+    // but ours is now an absolute MHz target, so if the base clock moves
+    // we still want the same physical MHz output (clamped down only if
+    // it no longer fits under the new, lower base clock) — which means
+    // recomputing speedPercent for the new base and pushing it too.
+    function sendConfig() {
+      const family      = selectedFamily;
+      const newBaseMhz  = parseInt($('base-mhz').value, 10);
+      if (family === null || !Number.isFinite(newBaseMhz) || newBaseMhz <= 0) return;
+
+      baseMhzCache = newBaseMhz;
+      targetMhz    = clampMhz(targetMhz); // no-op unless the new base clock is now below the old target
+      updateReadoutDisplay();
+
+      const fam = cpuFamilies.find(f => f.id === family);
+      if (fam) renderCalibWarning(fam.calibrated);
+
+      fetch('/api/throttle/config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ family, baseMhz: newBaseMhz })
+      })
+        .then(() => sendSpeedMhz(true)) // re-sync speedPercent so the absolute MHz target holds under the new base
+        .catch(() => showToast('Failed to save CPU configuration', 'fail'));
+    }
+
+    /* ── MHZ STEPPER BUTTONS (base clock field) ── */
+    function stepBaseMhz(delta) {
+      const input = $('base-mhz');
+      const min = parseInt(input.min, 10) || 1;
+      const max = parseInt(input.max, 10) || 9999;
+      let val = parseInt(input.value, 10);
+      if (!Number.isFinite(val)) val = 0;
+      val = Math.min(max, Math.max(min, val + delta));
+      input.value = val;
+      sendConfig();
+    }
+
+    $('mhz-up').addEventListener('click', () => stepBaseMhz(1));
+    $('mhz-down').addEventListener('click', () => stepBaseMhz(-1));
+
+    $('base-mhz').addEventListener('change', sendConfig);
+    $('base-mhz').addEventListener('keydown', e => {
+      if (e.key === 'Enter') { e.preventDefault(); $('base-mhz').blur(); }
+    });
+
+    /* ── POWER RAILS: SSE VOLTAGE STREAM + SPARKLINES ───────────────────── */
+    const VOLT_HISTORY_LEN = 40;
+    const vcoreHistory = [];
+    const vttHistory   = [];
+
+    function renderSpark(name, hist) {
+      if (hist.length < 2) return;
+      const min = Math.min(...hist), max = Math.max(...hist);
+      const range = (max - min) || 0.01;
+      const w = 200, h = 40, pad = 3;
+      const step = w / (VOLT_HISTORY_LEN - 1);
+      const startX = w - (hist.length - 1) * step;
+
+      const line = hist.map((v, i) => {
+        const x = startX + i * step;
+        const y = h - pad - ((v - min) / range) * (h - pad * 2);
+        return `${x.toFixed(1)},${y.toFixed(1)}`;
+      }).join(' ');
+
+      $(name + '-spark-line').setAttribute('points', line);
+      $(name + '-spark-fill').setAttribute('points', `${startX.toFixed(1)},${h} ${line} ${w},${h}`);
+    }
+
+    function pushVoltage(name, value) {
+      const hist = name === 'vcore' ? vcoreHistory : vttHistory;
+      hist.push(value);
+      if (hist.length > VOLT_HISTORY_LEN) hist.shift();
+      renderSpark(name, hist);
+      $(name + '-value').textContent = value.toFixed(2);
+    }
+
+    function updateWifiBars(rssi) {
+      const bars = getSignalBars(rssi);
+      const wifiContainer = $('wifi-bars');
+      const currentLitCount = wifiContainer.querySelectorAll('.lit').length;
+      if (currentLitCount !== bars || wifiContainer.children.length === 0) {
+        wifiContainer.innerHTML = [1, 2, 3, 4].map(n => `<span class="${n <= bars ? 'lit' : ''}"></span>`).join('');
+      }
+    }
+
+    // Single handler for the one combined telemetry payload (vcore, vtt,
+    // temp, rssi, mem, wifiPs) — deliberately kept as one SSE event rather
+    // than split into several, so there's only ever one place that
+    // consumes it. This also covers what used to require polling
+    // /api/system every second (see getSystemData below).
+    function pushTelemetry(data) {
+      pushVoltage('vcore', data.vcore);
+      pushVoltage('vtt', data.vtt);
+      if (data.temp !== undefined)    $('esp_temp').innerText = `${data.temp.toFixed(1)} °C`;
+      if (data.rssi !== undefined)    updateWifiBars(data.rssi);
+      if (data.mem !== undefined)     $('free_memory').innerText = `${Math.floor(data.mem / 1024)} KB`;
+      if (data.wifiPs !== undefined)  updateWifiPsToggle(data.wifiPs);
+      lastSSEActivity = Date.now();
+    }
+
+    fetch('/api/telemetry')
+      .then(r => r.json())
+      .then(pushTelemetry)
+      .catch(() => {});
+
+    let throttleEvents = new EventSource('/events');
+
+    function attachSSEHandlers(es) {
+      es.addEventListener('telemetry', e => pushTelemetry(JSON.parse(e.data)));
+    }
+    attachSSEHandlers(throttleEvents);
+
+    function reconnectSSE() {
+      try { throttleEvents.close(); } catch (_) {}
+      throttleEvents = new EventSource('/events');
+      attachSSEHandlers(throttleEvents);
+    }
+
+    /* ── WI-FI POWER SAVING TOGGLE ───────────────────────────────────────
+       confirmedWifiPs: true = MAX_MODEM (power saving ON), false = WIFI_PS_NONE.
+       pendingWifiPs:   value requested but not yet confirmed. null = unknown. */
+    let confirmedWifiPs = null;
+    let pendingWifiPs   = null;
+
+    function updateWifiPsToggle(livePs) {
+      if (pendingWifiPs !== null && livePs === pendingWifiPs) pendingWifiPs = null;
+      confirmedWifiPs = livePs;
+
+      const bOn  = $('ps-on');
+      const bOff = $('ps-off');
+      bOn.classList.remove('active', 'pending');
+      bOff.classList.remove('active', 'pending');
+
+      if (pendingWifiPs !== null) {
+        const pendingBtn   = pendingWifiPs ? bOn : bOff;
+        const confirmedBtn = pendingWifiPs ? bOff : bOn;
+        confirmedBtn.classList.add('active');
+        pendingBtn.classList.add('pending');
+      } else {
+        (livePs ? bOn : bOff).classList.add('active');
+      }
+    }
+
+    async function setWifiPs(psOn) {
+      if (pendingWifiPs !== null) return;
+      if (psOn === confirmedWifiPs) return;
+
+      pendingWifiPs = psOn;
+      updateWifiPsToggle(confirmedWifiPs);
+
+      try {
+        const res = await fetch('/api/system/wifi-ps', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ps: psOn })
+        });
+        if (!res.ok) throw new Error('failed');
+        pendingWifiPs = null;
+        updateWifiPsToggle(psOn);   // confirm directly, no poll needed
+      } catch (_) {
+        pendingWifiPs = null;
+        updateWifiPsToggle(confirmedWifiPs);
+      }
+    }
+
+    /* ── RESET / RESTART MODALS ──────────────────────────────────────────── */
+    function openResetModal() { $('modal-overlay').classList.add('visible'); }
+    function closeResetModal() {
+      $('modal-overlay').classList.remove('visible');
+      setTimeout(() => {
+        $('step-confirm').classList.remove('hidden');
+        $('step-resetting').classList.add('hidden');
+      }, 200);
+    }
+    function executeReset() {
+      $('step-confirm').classList.add('hidden');
+      $('step-resetting').classList.remove('hidden');
+      fetch('/api/factory-reset', { method: 'POST' })
+        .then(res => res.json())
+        .catch(() => console.log('Device connection severed. System rebooting.'));
+    }
+
+    function openRestartModal() {
+      $('restart-step-confirm').classList.remove('hidden');
+      $('restart-step-restarting').classList.add('hidden');
+      $('restart-modal-overlay').classList.add('visible');
+    }
+    function closeRestartModal() { $('restart-modal-overlay').classList.remove('visible'); }
+    async function executeRestart() {
+      $('restart-step-confirm').classList.add('hidden');
+      $('restart-step-restarting').classList.remove('hidden');
+      try { await fetch('/api/restart', { method: 'POST' }); } catch (_) { /* expected */ }
+
+      // Give the device time to actually reboot before forcing a fresh SSE connection
+      setTimeout(() => {
+        reconnectSSE();
+        closeRestartModal();
+      }, 6000);
+    }
+
+    let lastSSEActivity = Date.now();
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') checkSSEStale();
+    });
+
+    function checkSSEStale() {
+      if (Date.now() - lastSSEActivity > 40000) reconnectSSE(); // > ~1.5x your 25s ping interval
+    }
+    setInterval(checkSSEStale, 15000);
+
+    /* ── SYSTEM INFO (firmware, IP, SSID, model, storage) ──────────────────
+       Fetched once on load rather than polled: memory and Wi-Fi power-
+       saving state are covered continuously by the SSE telemetry stream
+       (see pushTelemetry above), so there's nothing here that needs a
+       repeating timer. ─────────────────────────────────────────────────── */
+    function getSystemData() {
+      fetch('/api/system')
+        .then(res => res.json())
+        .then(data => {
+          const esp = data.esp || {};
+
+          if ($('firmware_version').innerText !== `v${data.firmware}`) {
+            $('firmware_version').innerText = `v${data.firmware}`;
+          }
+          if ($('ip_address').innerText !== data.ipAddress) {
+            $('ip_address').innerText = data.ipAddress;
+            $('ip_address').href = `http://${data.ipAddress}/`;
+          }
+          if ($('ssid').innerText !== data.ssid) {
+            $('ssid').innerText = data.ssid;
+          }
+
+          if (esp.model) {
+            const modelEl = $('esp_model');
+            modelEl.textContent = esp.model;
+            const tipParts = [];
+            if (esp.cores !== undefined) tipParts.push(`Cores: ${esp.cores}`);
+            if (esp.rev   !== undefined) tipParts.push(`Rev: ${esp.rev}`);
+            if (esp.ver)                 tipParts.push(`SDK: ${esp.ver}`);
+            modelEl.title = tipParts.join(' · ');
+          }
+
+          // Wi-Fi power saving has no effect in standalone AP mode (no
+          // upstream Wi-Fi to save power against) and leaving the radio at
+          // full power there runs the module noticeably hotter — so the
+          // toggle is simply hidden rather than shown greyed-out.
+          if (data.apMode !== undefined) {
+            $('wifi-power-item').classList.toggle('hidden', data.apMode);
+          }
+
+          if (data.littlefs_total && data.littlefs_total > 0) {
+            const total = data.littlefs_total;
+            const free  = data.littlefs_free;
+            const used  = total - free;
+            const usedPercent = ((used / total) * 100).toFixed(1);
+            $('storage_text').textContent     = `${fmtBytes(free)} free`;
+            $('storage-progress').style.width = `${usedPercent}%`;
+            document.querySelector('.storage-wrapper')
+              .setAttribute('title', `${fmtBytes(used)} / ${fmtBytes(total)} (${usedPercent}% used)`);
+          } else {
+            $('storage_text').textContent     = 'Offline';
+            $('storage-progress').style.width = '0%';
+            document.querySelector('.storage-wrapper').setAttribute('title', 'LittleFS Unmounted');
+          }
+        })
+        .catch(err => console.log('Could not read system data.', err));
+    }
+
+    /* ── INIT ────────────────────────────────────────────────────────────── */
+    loadCpuFamilies().then(loadThrottleStatus);
+    getSystemData();
+  </script>
+
+</body>
+</html>

@@ -1,0 +1,1017 @@
+<!--
+  Copyright (c) 2026 Alexander Fuchs
+  Licensed under the MIT License.
+-->
+
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>HAWK 370 · Files</title>
+  <script src="hawk370.js"></script>
+  <link rel="stylesheet" href="hawk370.css">
+  <style>
+    .card-header { gap: 1em; }
+
+
+    /* ── UPLOAD SECTION ── */
+    .upload-section { padding: 0 1.2em 1.2em; display: flex; flex-direction: column; gap: 0.8em; }
+
+    /* ── DROP ZONE ── */
+    .dropzone {
+      position: relative;
+      border: 1px dashed var(--border-bright);
+      border-radius: 0.4em;
+      background: var(--panel-2);
+      padding: 2.8em 2em;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.8em;
+      cursor: pointer;
+      text-align: center;
+      transition: border-color 0.15s, background 0.15s, box-shadow 0.15s;
+    }
+
+    .dropzone:hover,
+    .dropzone.drag-over {
+      border-color: var(--accent);
+      background: var(--accent-dim);
+      box-shadow: 0 0 0 3px var(--accent-glow);
+    }
+
+    .dropzone.locked { pointer-events: none; opacity: 0.4; }
+
+    .dropzone input[type="file"] {
+      position: absolute;
+      inset: 0;
+      opacity: 0;
+      cursor: pointer;
+      width: 100%;
+      height: 100%;
+    }
+
+    .drop-icon {
+      width: 4em;
+      height: 4em;
+      border-radius: 0.4em;
+      background: var(--panel);
+      border: 1px solid var(--border-bright);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: border-color 0.15s;
+      color: var(--text-2);
+    }
+
+    .dropzone:hover .drop-icon,
+    .dropzone.drag-over .drop-icon { border-color: var(--accent); color: var(--accent); }
+
+    .drop-icon svg { width: 1.8em; height: 1.8em; }
+    .drop-label    { font-size: 1.3em; font-weight: 600; color: var(--text); }
+    .drop-hint     { font-family: var(--mono); font-size: 1em; color: var(--text-3); line-height: 1.5; }
+
+    /* ── FILE QUEUE ── */
+    .queue { display: flex; flex-direction: column; gap: 0.5em; }
+
+    .queue-row {
+      display: flex;
+      align-items: center;
+      gap: 0.8em;
+      padding: 1em 1.2em;
+      background: var(--panel-2);
+      border: 1px solid var(--border-bright);
+      border-radius: 0.4em;
+      transition: border-color 0.15s;
+      min-width: 0;
+    }
+
+    .queue-row.uploading           { border-color: var(--accent); }
+    .queue-row.uploading.file-type { border-color: var(--blue); }
+    .queue-row.done                { border-color: rgba(61,220,132,0.35); opacity: 0.6; }
+    .queue-row.failed              { border-color: rgba(255,85,85,0.35); }
+
+    .q-icon     { flex-shrink: 0; color: var(--text-3); }
+    .q-icon svg { width: 1.5em; height: 1.5em; }
+
+    .q-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 0.2em; }
+
+    .q-name {
+      font-family: var(--mono);
+      font-size: 1.15em;
+      color: var(--text);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .q-meta { display: flex; align-items: center; gap: 0.7em; }
+    .q-size { font-family: var(--mono); font-size: 1em; color: var(--text-3); }
+
+    .q-tag {
+      font-family: var(--mono);
+      font-size: 0.9em;
+      font-weight: 600;
+      letter-spacing: 0.07em;
+      text-transform: uppercase;
+      padding: 0.15em 0.5em;
+      border-radius: 0.2em;
+      border: 1px solid transparent;
+    }
+
+    .q-tag.firmware { color: var(--accent); background: var(--accent-dim); border-color: var(--accent-glow); }
+    .q-tag.file     { color: var(--blue);   background: var(--blue-dim);   border-color: rgba(77,159,255,0.22); }
+
+    .q-status { font-family: var(--mono); font-size: 0.95em; color: var(--text-3); }
+
+    .queue-row.uploading           .q-status { color: var(--accent); }
+    .queue-row.uploading.file-type .q-status { color: var(--blue); }
+    .queue-row.done                .q-status { color: var(--green); }
+    .queue-row.failed              .q-status { color: var(--red); }
+
+    .q-progress-track {
+      display: none;
+      height: 0.3em;
+      background: var(--panel);
+      border-radius: 99em;
+      overflow: hidden;
+      margin-top: 0.3em;
+    }
+
+    .queue-row.uploading .q-progress-track { display: block; }
+
+    .q-progress-bar {
+      height: 100%;
+      width: 0%;
+      border-radius: 99em;
+      transition: width 0.15s ease;
+      background: var(--accent);
+    }
+
+    .queue-row.uploading.file-type .q-progress-bar { background: var(--blue); }
+
+    .q-remove       { background: none; border: none; cursor: pointer; color: var(--text-3); display: flex; align-items: center; padding: 0.2em; transition: color 0.15s; flex-shrink: 0; }
+    .q-remove:hover { color: var(--red); }
+    .q-remove svg   { width: 1.3em; height: 1.3em; }
+
+    /* ── NOTICES ── */
+    .notice {
+      display: none;
+      align-items: flex-start;
+      gap: 1em;
+      padding: 1.2em 1.4em;
+      border-radius: 0.4em;
+      font-size: 1.2em;
+      line-height: 1.5;
+    }
+
+    .notice.visible { display: flex; }
+    .notice svg     { width: 1.4em; height: 1.4em; flex-shrink: 0; margin-top: 0.05em; }
+
+    .notice.warning { background: var(--red-dim);   border: 1px solid rgba(255,85,85,0.25);  color: var(--red); }
+    .notice.info    { background: var(--accent-dim); border: 1px solid var(--accent-glow);    color: var(--accent); }
+    .notice.success { background: var(--green-dim);  border: 1px solid rgba(61,220,132,0.25); color: var(--green); }
+    .notice.error   { background: var(--red-dim);    border: 1px solid rgba(255,85,85,0.25);  color: var(--red); }
+
+    /* ── OVERALL PROGRESS ── */
+    .overall-progress         { display: none; flex-direction: column; gap: 0.5em; }
+    .overall-progress.visible { display: flex; }
+
+    .overall-header { display: flex; justify-content: space-between; font-family: var(--mono); font-size: 1.1em; color: var(--text-2); }
+    .overall-track  { height: 0.5em; background: var(--panel-2); border-radius: 99em; overflow: hidden; border: 1px solid var(--border); }
+    .overall-bar    { height: 100%; width: 0%; border-radius: 99em; transition: width 0.2s ease; background: var(--accent); }
+
+
+    /* ── REBOOT COUNTDOWN ── */
+    .reboot-row         { display: none; justify-content: center; font-family: var(--mono); font-size: 1.1em; color: var(--text-3); padding: 0.4em 0; }
+    .reboot-row.visible { display: flex; }
+    .reboot-row span    { color: var(--accent); font-weight: 600; margin: 0 0.3em; }
+
+    /* ── STORAGE BAR ── */
+    .storage-bar-wrap { display: flex; align-items: center; gap: 1.2em; padding: 0 0 0.4em 0; }
+
+    .storage-bar-track { flex: 1; height: 0.35em; background: var(--border-bright); border-radius: 1em; overflow: hidden; }
+
+    .storage-bar-fill           { height: 100%; background: var(--accent); border-radius: 1em; transition: width 0.4s ease; width: 0%; }
+    .storage-bar-fill.warn      { background: var(--yellow); }
+    .storage-bar-fill.crit      { background: var(--red); }
+    .storage-bar-label          { font-family: var(--mono); font-size: 1em; color: var(--text-3); white-space: nowrap; flex-shrink: 0; }
+    .storage-bar-label span     { color: var(--text-2); }
+
+    /* ── FILE TABLE ── */
+    .file-table-section { padding: 0 1.2em 1.2em; }
+
+    .file-table { width: 100%; border-collapse: collapse; border: 1px solid var(--border-bright); border-radius: 0.4em; overflow: hidden; }
+
+    .file-table thead tr         { background: var(--panel-2); border-bottom: 1px solid var(--border-bright); }
+    .file-table th               { font-family: var(--mono); font-size: 0.85em; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase; color: var(--text-3); padding: 0.9em 1.2em; text-align: left; }
+    .file-table th.col-size      { width: 7em; text-align: right; }
+    .file-table th.col-action    { width: 6.5em; text-align: center; }
+    .file-table tbody tr         { border-bottom: 1px solid var(--border); transition: background 0.12s; }
+    .file-table tbody tr:last-child { border-bottom: none; }
+    .file-table tbody tr:hover   { background: rgba(255,255,255,0.02); }
+    .file-table td               { padding: 0.75em 1.2em; vertical-align: middle; }
+
+    .fn-wrap { display: flex; align-items: center; gap: 0.6em; min-width: 0; }
+
+    .fn-icon     { color: var(--text-3); flex-shrink: 0; }
+    .fn-icon svg { width: 1.25em; height: 1.25em; display: block; }
+
+    .fn-icon.ext-html                                          { color: var(--accent); }
+    .fn-icon.ext-js                                            { color: var(--yellow); }
+    .fn-icon.ext-css                                           { color: var(--blue); }
+    .fn-icon.ext-webp, .fn-icon.ext-png, .fn-icon.ext-jpg      { color: var(--green); }
+    .fn-icon.ext-json                                          { color: var(--lavender); }
+    .fn-icon.ext-bin                                           { color: var(--accent); }
+    .fn-icon.ext-gz                                            { color: var(--purple); }
+
+    .fn-name {
+      font-family: var(--mono);
+      font-size: 1.05em;
+      color: var(--text);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      cursor: pointer;
+      border-bottom: 1px dashed transparent;
+      transition: border-color 0.15s, color 0.15s;
+      flex: 1;
+      min-width: 0;
+    }
+
+    .fn-name:hover { color: var(--accent); border-bottom-color: var(--accent-glow); }
+
+    .fn-edit {
+      font-family: var(--mono);
+      font-size: 1.05em;
+      color: var(--text);
+      background: var(--bg);
+      border: 1px solid var(--accent);
+      border-radius: 0.25em;
+      padding: 0.15em 0.5em;
+      outline: none;
+      flex: 1;
+      min-width: 0;
+    }
+
+    .fn-confirm {
+      font-family: var(--mono);
+      font-size: 0.85em;
+      font-weight: 600;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      color: var(--bg);
+      background: var(--accent);
+      border: none;
+      border-radius: 0.25em;
+      padding: 0.25em 0.6em;
+      cursor: pointer;
+      flex-shrink: 0;
+      transition: opacity 0.15s;
+    }
+
+    .fn-confirm:hover { opacity: 0.85; }
+
+    .fn-cancel       { background: none; border: none; cursor: pointer; color: var(--text-3); display: flex; align-items: center; padding: 0.2em; transition: color 0.15s; flex-shrink: 0; }
+    .fn-cancel:hover { color: var(--red); }
+    .fn-cancel svg   { width: 1.1em; height: 1.1em; }
+
+    .file-size  { font-family: var(--mono); font-size: 1em; color: var(--text-3); text-align: right; }
+    .col-action { text-align: center; }
+
+    /* btn-icon padding override (slightly tighter than shared default) */
+    .btn-icon { padding: 0.35em; }
+
+    /* ── FILE LOADING / EMPTY STATE ── */
+    .fs-state {
+      padding: 2.4em 2em;
+      text-align: center;
+      font-family: var(--mono);
+      font-size: 1.05em;
+      color: var(--text-3);
+      border: 1px solid var(--border-bright);
+      border-radius: 0.4em;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.6em;
+    }
+
+    .fs-state svg { width: 2.8em; height: 2.8em; color: var(--text-3); }
+
+    .spinner-sm {
+      display: inline-block;
+      width: 1.6em;
+      height: 1.6em;
+      border: 0.18em solid var(--border-bright);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+    }
+
+    /* footer gap override */
+    .footer-kv { gap: 1em 1.6em; }
+  </style>
+</head>
+<body>
+
+  <div class="card">
+
+    <!-- ── HEADER ── -->
+    <div class="card-header">
+      <a href="/">
+        <img src="hawk370.webp" alt="HAWK 370 Logo" class="header-logo">
+      </a>
+      <span class="header-title">Files</span>
+
+      <!-- Home button -->
+      <a class="icon-btn" href="/" title="Home">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+             stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M3 12L12 3L21 12"/>
+          <path d="M5 10L5 21L19 21L19 10"/>
+          <path d="M9 21L9 15L15 15L15 21"/>
+        </svg>
+      </a>
+    </div>
+
+    <!-- ── UPLOAD AREA ── -->
+    <div class="section-label">Upload Files</div>
+
+    <div class="upload-section">
+
+      <!-- Drop zone -->
+      <div class="dropzone" id="dropzone">
+        <input type="file" id="fileInput" accept="*/*" multiple>
+        <div class="drop-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+            <polyline points="17 8 12 3 7 8"/>
+            <line x1="12" y1="3" x2="12" y2="15"/>
+          </svg>
+        </div>
+        <div class="drop-label">Drop files here or click to browse</div>
+        <div class="drop-hint">.bin → firmware OTA &nbsp;·&nbsp; any other file → Storage</div>
+      </div>
+
+      <!-- File queue -->
+      <div class="queue" id="queue"></div>
+
+      <!-- Firmware-in-queue notice -->
+      <div class="notice info" id="firmwareNotice">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="10"/>
+          <line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+        </svg>
+        <span>Firmware file detected. It will be flashed last. The device will reboot after a successful flash.</span>
+      </div>
+
+      <!-- Space warning -->
+      <div class="notice warning" id="spaceWarning">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+          <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+        </svg>
+        <span id="spaceWarningText"></span>
+      </div>
+
+      <!-- Overall progress (shown during upload run) -->
+      <div class="overall-progress" id="overallProgress">
+        <div class="overall-header">
+          <span id="overallLabel">Uploading…</span>
+          <span id="overallCounter">0 / 0</span>
+        </div>
+        <div class="overall-track">
+          <div class="overall-bar" id="overallBar"></div>
+        </div>
+      </div>
+
+      <!-- Upload button -->
+      <button class="btn btn-block btn-accent" id="uploadBtn" disabled>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+          <polyline points="17 8 12 3 7 8"/>
+          <line x1="12" y1="3" x2="12" y2="15"/>
+        </svg>
+        <span id="uploadBtnLabel">Select files to upload</span>
+      </button>
+
+      <!-- Final status -->
+      <div class="notice" id="statusMsg">
+        <svg id="statusIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></svg>
+        <span id="statusText"></span>
+      </div>
+
+      <!-- Reboot countdown -->
+      <div class="reboot-row" id="rebootRow">
+        Reconnect in <span id="rebootSec">10</span>s…
+      </div>
+
+    </div><!-- /upload-section -->
+
+    <div class="divider"></div>
+
+    <!-- ── FILES ON DEVICE ── -->
+    <div class="section-label">Files on Device</div>
+
+    <div class="file-table-section">
+
+      <!-- Loading state -->
+      <div class="fs-state" id="fs-loading">
+        <div class="spinner-sm"></div>
+        Loading…
+      </div>
+
+      <!-- Empty state -->
+      <div class="fs-state hidden" id="fs-empty">
+        <svg viewBox="0 0 48 48" fill="none">
+          <rect x="8" y="6" width="24" height="32" rx="2" stroke="currentColor" stroke-width="2"/>
+          <path d="M24 6l8 8h-8V6z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+          <path d="M14 20h16M14 26h10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+        </svg>
+        No files found - Storage is empty.
+      </div>
+
+      <!-- File table -->
+      <table class="file-table hidden" id="fs-table">
+        <thead>
+          <tr>
+            <th>Filename</th>
+            <th class="col-size">Size</th>
+            <th class="col-action">Actions</th>
+          </tr>
+        </thead>
+        <tbody id="fs-tbody"></tbody>
+      </table>
+
+      <div class="divider"></div>
+
+      <!-- Storage bar (sits above the table) -->
+      <div class="storage-bar-wrap" style="margin-bottom:1em">
+        <div class="storage-bar-track">
+          <div class="storage-bar-fill" id="fs-bar-fill"></div>
+        </div>
+        <div class="storage-bar-label" id="fs-bar-label"><span>-</span> free</div>
+      </div>
+
+    </div>
+
+  </div><!-- /card -->
+
+  <!-- ── CONFIRM MODAL ── -->
+  <div class="modal-overlay" id="confirm-overlay">
+    <div class="modal">
+      <div class="modal-header">
+        <div class="modal-icon danger">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/>
+            <line x1="10" y1="11" x2="10" y2="17"/>
+            <line x1="14" y1="11" x2="14" y2="17"/>
+          </svg>
+        </div>
+        <span class="modal-title danger">Delete file?</span>
+      </div>
+      <div class="modal-body">
+        <p>This will permanently remove <span class="modal-filename" id="confirm-filename"></span> from Storage. This cannot be undone.</p>
+        <div class="modal-actions">
+          <button class="btn-cancel" onclick="closeConfirm()">Cancel</button>
+          <button class="btn-confirm danger" id="confirm-ok">Delete</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    /* ── CONFIG ─────────────────────────────────────────────────────────── */
+    const FIRMWARE_ENDPOINT = '/ota/firmware';
+    const FILE_ENDPOINT     = '/ota/file';
+    const SYSTEM_ENDPOINT   = '/api/system';
+
+    /* ── STATE ──────────────────────────────────────────────────────────── */
+    // Each entry: { id, file, isFirmware, status: 'pending'|'uploading'|'done'|'failed' }
+    let queue          = [];
+    let nextId         = 0;
+    let freeSpaceBytes = null;
+    let isUploading    = false;
+
+    /* ── DOM ────────────────────────────────────────────────────────────── */
+    const dropzone       = $('dropzone');
+    const fileInput      = $('fileInput');
+    const queueEl        = $('queue');
+    const firmwareNotice = $('firmwareNotice');
+    const spaceWarning   = $('spaceWarning');
+    const spaceWarningTxt= $('spaceWarningText');
+    const overallProgress= $('overallProgress');
+    const overallBar     = $('overallBar');
+    const overallLabel   = $('overallLabel');
+    const overallCounter = $('overallCounter');
+    const uploadBtn      = $('uploadBtn');
+    const uploadBtnLbl   = $('uploadBtnLabel');
+    const statusMsg      = $('statusMsg');
+    const statusIcon     = $('statusIcon');
+    const statusText     = $('statusText');
+    const rebootRow      = $('rebootRow');
+    const rebootSec      = $('rebootSec');
+
+    /* ── HELPERS ────────────────────────────────────────────────────────── */
+    function isFirmwareFile(file) {
+      return file.name.toLowerCase().endsWith('.bin');
+    }
+
+    /* ── QUEUE MANAGEMENT ───────────────────────────────────────────────── */
+    function addFiles(files) {
+      for (const file of files) {
+        // Deduplicate by name
+        if (queue.some(e => e.file.name === file.name)) continue;
+        queue.push({ id: nextId++, file, isFirmware: isFirmwareFile(file), status: 'pending' });
+      }
+      renderQueue();
+      updateUI();
+    }
+
+    function removeEntry(id) {
+      queue = queue.filter(e => e.id !== id);
+      renderQueue();
+      updateUI();
+    }
+
+    function renderQueue() {
+      queueEl.innerHTML = '';
+
+      for (const entry of queue) {
+        const row = document.createElement('div');
+        row.className = 'queue-row' +
+          (entry.isFirmware ? '' : ' file-type') +
+          (entry.status === 'uploading' ? ' uploading' : '') +
+          (entry.status === 'done'      ? ' done'      : '') +
+          (entry.status === 'failed'    ? ' failed'    : '');
+        row.id = 'qrow-' + entry.id;
+
+        const statusLabels = {
+          pending:   'queued',
+          uploading: entry.isFirmware ? 'flashing…' : 'uploading…',
+          done:      '✓ done',
+          failed:    '✗ failed',
+        };
+
+        row.innerHTML = `
+          <div class="q-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/>
+              <polyline points="13 2 13 9 20 9"/>
+            </svg>
+          </div>
+          <div class="q-info">
+            <span class="q-name" title="${entry.file.name}">${entry.file.name}</span>
+            <div class="q-meta">
+              <span class="q-size">${fmtBytes(entry.file.size)}</span>
+              <span class="q-tag ${entry.isFirmware ? 'firmware' : 'file'}">${entry.isFirmware ? 'Firmware' : 'File'}</span>
+              <span class="q-status">${statusLabels[entry.status]}</span>
+            </div>
+            <div class="q-progress-track">
+              <div class="q-progress-bar" id="qbar-${entry.id}"></div>
+            </div>
+          </div>
+          ${entry.status === 'pending'
+            ? `<button class="q-remove" data-id="${entry.id}" title="Remove">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                </svg>
+               </button>`
+            : ''}
+        `;
+
+        queueEl.appendChild(row);
+      }
+
+      // Attach remove handlers
+      queueEl.querySelectorAll('.q-remove').forEach(btn => {
+        btn.addEventListener('click', () => removeEntry(Number(btn.dataset.id)));
+      });
+    }
+
+    /* ── UI STATE SYNC ──────────────────────────────────────────────────── */
+    function updateUI() {
+      const hasPending  = queue.some(e => e.status === 'pending');
+      const hasFirmware = queue.some(e => e.isFirmware);
+
+      // Firmware notice
+      firmwareNotice.classList.toggle('visible', hasFirmware && hasPending);
+
+      // Space warning: sum of all pending non-firmware files
+      const pendingFileBytes = queue
+        .filter(e => !e.isFirmware && e.status === 'pending')
+        .reduce((sum, e) => sum + e.file.size, 0);
+
+      let warnBlocks = false;
+      if (pendingFileBytes > freeSpaceBytes) {
+        const reason = `only ${fmtBytes(freeSpaceBytes)} free`;
+        spaceWarningTxt.textContent =
+          `Files total ${fmtBytes(pendingFileBytes)} - ${reason}.`;
+        spaceWarning.classList.add('visible');
+        warnBlocks = true;
+      } else {
+        spaceWarning.classList.remove('visible');
+      }
+
+      // Upload button
+      const canUpload = hasPending && !isUploading && !warnBlocks;
+      uploadBtn.disabled = !canUpload;
+
+      if (isUploading) {
+        uploadBtnLbl.textContent = 'Uploading…';
+      } else if (!queue.length) {
+        uploadBtnLbl.textContent = 'Select files to upload';
+      } else {
+        const pendingCount = queue.filter(e => e.status === 'pending').length;
+        const label = pendingCount === 1
+          ? (hasFirmware && pendingCount === 1 ? 'Flash Firmware' : 'Upload 1 File')
+          : `Upload ${pendingCount} Files${hasFirmware ? ' + Flash Firmware' : ''}`;
+        uploadBtnLbl.textContent = label;
+      }
+    }
+
+    /* ── UPLOAD QUEUE RUNNER ────────────────────────────────────────────── */
+    async function runUploadQueue() {
+      if (isUploading) return;
+      isUploading = true;
+
+      // Reset global status
+      statusMsg.className = 'notice';
+      rebootRow.classList.remove('visible');
+
+      // Sort: non-firmware first, firmware last
+      const pending = queue
+        .filter(e => e.status === 'pending')
+        .sort((a, b) => a.isFirmware - b.isFirmware);
+
+      const total    = pending.length;
+      let   done     = 0;
+      let   hadError = false;
+
+      overallProgress.classList.add('visible');
+      overallBar.style.width = '0%';
+      overallCounter.textContent = `0 / ${total}`;
+      overallLabel.textContent = 'Starting…';
+
+      dropzone.classList.add('locked');
+      updateUI();
+
+      for (const entry of pending) {
+        // Mark row as uploading
+        entry.status = 'uploading';
+        renderQueue();
+        overallLabel.textContent = entry.isFirmware
+          ? `Flashing firmware (${done + 1} / ${total})…`
+          : `Uploading "${entry.file.name}" (${done + 1} / ${total})…`;
+
+        const ok = await uploadOne(entry);
+
+        entry.status = ok ? 'done' : 'failed';
+        if (!ok) hadError = true;
+
+        done++;
+        overallCounter.textContent = `${done} / ${total}`;
+        overallBar.style.width = Math.round((done / total) * 100) + '%';
+
+        renderQueue();
+
+        // Stop on failure (don't flash firmware if a file failed, for safety)
+        if (!ok) break;
+      }
+
+      isUploading = false;
+      dropzone.classList.remove('locked');
+
+      const firmwareDone = queue.some(e => e.isFirmware && e.status === 'done');
+
+      if (hadError) {
+        overallLabel.textContent = 'Stopped due to error.';
+        showStatus('error', 'Upload stopped. Check the failed file and try again.');
+      } else if (firmwareDone) {
+        overallLabel.textContent = 'Firmware flashed. Rebooting…';
+        showStatus('success', 'All files uploaded. Firmware flashed --- device is rebooting…');
+        startRebootCountdown(10);
+      } else {
+        overallLabel.textContent = `Done - ${done} file${done !== 1 ? 's' : ''} uploaded.`;
+        showStatus('success', `${done} file${done !== 1 ? 's' : ''} successfully written to Storage.`);
+        // Clear done entries, keep failed ones
+        queue = queue.filter(e => e.status !== 'done');
+        renderQueue();
+        fetchSystemInfo();
+        loadFiles(); // refresh file table
+      }
+
+      updateUI();
+    }
+
+    /* Upload a single entry — returns true on success */
+    function uploadOne(entry) {
+      return new Promise((resolve) => {
+        const endpoint = entry.isFirmware ? FIRMWARE_ENDPOINT : FILE_ENDPOINT;
+        const formData = new FormData();
+
+        if (entry.isFirmware) {
+          formData.append('firmware', entry.file, entry.file.name);
+        } else {
+          formData.append('path', '/' + entry.file.name);
+          formData.append('file', entry.file, entry.file.name);
+        }
+
+        const xhr = new XMLHttpRequest();
+        const barEl = () => $('qbar-' + entry.id);
+
+        xhr.upload.addEventListener('progress', e => {
+          if (!e.lengthComputable) return;
+          const pct = Math.round((e.loaded / e.total) * 100);
+          const bar = barEl();
+          if (bar) bar.style.width = pct + '%';
+        });
+
+        xhr.addEventListener('load', () => {
+          const bar = barEl();
+          if (bar) bar.style.width = '100%';
+          resolve(xhr.status === 200);
+        });
+
+        xhr.addEventListener('error', () => resolve(false));
+        xhr.addEventListener('abort', () => resolve(false));
+
+        xhr.open('POST', endpoint);
+        xhr.send(formData);
+      });
+    }
+
+    /* ── STATUS / COUNTDOWN ─────────────────────────────────────────────── */
+    function showStatus(type, text) {
+      const icons = {
+        success: '<polyline points="20 6 9 17 4 12"/>',
+        error:   '<line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>',
+      };
+      statusMsg.className = 'notice visible ' + type;
+      statusIcon.innerHTML = icons[type] || '';
+      statusText.textContent = text;
+    }
+
+    function startRebootCountdown(secs) {
+      rebootRow.classList.add('visible');
+      rebootSec.textContent = secs;
+      const iv = setInterval(() => {
+        secs--;
+        rebootSec.textContent = secs;
+        if (secs <= 0) {
+          clearInterval(iv);
+          rebootRow.classList.remove('visible');
+        }
+      }, 1000);
+    }
+
+    /* ── FETCH SYSTEM INFO ──────────────────────────────────────────────── */
+    function fetchSystemInfo() {
+      fetch(SYSTEM_ENDPOINT)
+        .then(r => r.ok ? r.json() : null)
+        .then(data => {
+          if (!data) return;
+          const free  = data?.littlefs_free  ?? null;
+          const total = data?.littlefs_total ?? null;
+          if (free  !== null) { 
+            freeSpaceBytes = free; 
+          }
+          updateStorageBar(total, free);
+          updateUI(); // re-check space warnings with fresh data
+        })
+        .catch((err) => { console.log(err); });
+    }
+
+    /* ── STORAGE BAR ────────────────────────────────────────────────────── */
+    function updateStorageBar(total, free) {
+      if (total === null || free === null) return;
+      const pct  = total > 0 ? ((total - free) / total) * 100 : 0;
+      const fill = $('fs-bar-fill');
+      fill.style.width = pct.toFixed(1) + '%';
+      fill.classList.toggle('warn', pct >= 70 && pct < 90);
+      fill.classList.toggle('crit', pct >= 90);
+      $('fs-bar-label').innerHTML = `<span>${fmtBytes(free)}</span> free of ${fmtBytes(total)}`;
+    }
+
+    /* ── FILE MANAGER ───────────────────────────────────────────────────── */
+    function extClass(name) {
+      const ext = name.split('.').pop().toLowerCase();
+      const map = { html:'ext-html', js:'ext-js', css:'ext-css',
+                    webp:'ext-webp', png:'ext-png', jpg:'ext-jpg',
+                    jpeg:'ext-jpg', json:'ext-json', bin:'ext-bin', gz:"ext-gz" };
+      return map[ext] || '';
+    }
+
+    const fileIconSvg = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+        stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+        <polyline points="14 2 14 8 20 8"/></svg>`;
+
+    function renderFileTable(files) {
+      const loading = $('fs-loading');
+      const empty   = $('fs-empty');
+      const table   = $('fs-table');
+      const tbody   = $('fs-tbody');
+
+      loading.classList.add('hidden');
+
+      if (!files || files.length === 0) {
+        empty.classList.remove('hidden');
+        table.classList.add('hidden');
+        return;
+      }
+
+      empty.classList.add('hidden');
+      table.classList.remove('hidden');
+      tbody.innerHTML = '';
+
+      files.forEach(f => {
+        const tr = document.createElement('tr');
+        tr.id = 'frow-' + CSS.escape(f.name);
+        tr.innerHTML = `
+          <td>
+            <div class="fn-wrap" id="fn-wrap-${escH(f.name)}">
+              <span class="fn-icon ${extClass(f.name)}">${fileIconSvg}</span>
+              <span class="fn-name" title="Click to rename"
+                    onclick="startRename('${f.name.replace(/'/g,"\\'")}')">/${escH(f.name)}</span>
+            </div>
+          </td>
+          <td class="file-size">${fmtBytes(f.size)}</td>
+            <td class="col-action" style="display:flex;gap:0.4em;justify-content:center">
+              <a class="btn-icon blue" href="/${escH(f.name)}" download="${escH(f.name)}" title="Download ${escH(f.name)}">
+                <svg viewBox="0 0 16 16" fill="none">
+                  <path d="M8 2v8M5 7l3 3 3-3" stroke="currentColor"
+                        stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+                  <path d="M3 12h10" stroke="currentColor"
+                        stroke-width="1.3" stroke-linecap="round"/>
+                </svg>
+              </a>
+              <a class="btn-icon danger" href="javascript:void(0)" title="Delete ${escH(f.name)}" onclick="confirmDelete('${f.name.replace(/'/g,"\\'")}')">
+                <svg viewBox="0 0 16 16" fill="none">
+                  <path d="M4 5h8M6.2 5V3.6h3.6V5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" />
+                  <path d="M4.7 5.2l.5 7.6c.1.9.7 1.4 1.5 1.4h2.6c.8 0 1.4-.5 1.5-1.4l.5-7.6" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" />
+                </svg>
+              </a>
+            </td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    async function loadFiles() {
+      $('fs-loading').classList.remove('hidden');
+      $('fs-empty').classList.add('hidden');
+      $('fs-table').classList.add('hidden');
+
+      try {
+        const files = await fetch('/api/files/all').then(r => r.json());
+        renderFileTable(Array.isArray(files) ? files : []);
+      } catch (e) {
+        $('fs-loading').classList.add('hidden');
+        $('fs-empty').classList.remove('hidden');
+      }
+    }
+
+    /* ── RENAME ─────────────────────────────────────────────────────────── */
+    function startRename(name) {
+      const wrap = $('fn-wrap-' + name);
+      if (!wrap) return;
+
+      wrap.innerHTML = `
+        <span class="fn-icon ${extClass(name)}">${fileIconSvg}</span>
+        <input class="fn-edit" id="fn-input-${escH(name)}"
+               value="${escH(name)}" spellcheck="false"
+               onkeydown="handleRenameKey(event,'${name.replace(/'/g,"\\'")}')">
+        <button class="fn-confirm" onclick="confirmRename('${name.replace(/'/g,"\\'")}')">OK</button>
+        <button class="fn-cancel" title="Cancel" onclick="cancelRename('${name.replace(/'/g,"\\'")}')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+          </svg>
+        </button>
+      `;
+      const input = $('fn-input-' + name);
+      if (input) { input.focus(); input.select(); }
+    }
+
+    function handleRenameKey(e, name) {
+      if (e.key === 'Enter')  confirmRename(name);
+      if (e.key === 'Escape') cancelRename(name);
+    }
+
+    function cancelRename(name) {
+      const wrap = $('fn-wrap-' + name);
+      if (!wrap) return;
+      wrap.innerHTML = `
+        <span class="fn-icon ${extClass(name)}">${fileIconSvg}</span>
+        <span class="fn-name" title="Click to rename"
+              onclick="startRename('${name.replace(/'/g,"\\'")}')">/${escH(name)}</span>
+      `;
+    }
+
+    async function confirmRename(oldName) {
+      const input   = $('fn-input-' + oldName);
+      if (!input) return;
+      const newName = input.value.trim();
+
+      if (!newName || newName === oldName) { cancelRename(oldName); return; }
+
+      try {
+        const r = await fetch('/api/files/rename', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ from: '/' + oldName, to: '/' + newName })
+        }).then(r => r.json());
+
+        if (r.status === 'success') {
+          loadFiles();
+        } else {
+          showStatus('error', `Rename failed: ${r.message || 'unknown error'}`);
+          cancelRename(oldName);
+        }
+      } catch (e) {
+        showStatus('error', 'Rename failed - check connection.');
+        cancelRename(oldName);
+      }
+    }
+
+    /* ── DELETE ─────────────────────────────────────────────────────────── */
+    let pendingDeleteName = null;
+
+    function confirmDelete(name) {
+      pendingDeleteName = name;
+      $('confirm-filename').textContent = '/' + name;
+      $('confirm-ok').onclick = () => {
+        deleteFile(pendingDeleteName);
+        closeConfirm();
+      };
+      $('confirm-overlay').classList.add('visible');
+    }
+
+    function closeConfirm() {
+      $('confirm-overlay').classList.remove('visible');
+      pendingDeleteName = null;
+    }
+
+    // Close on backdrop click
+    $('confirm-overlay').addEventListener('click', e => {
+      if (e.target === e.currentTarget) closeConfirm();
+    });
+
+    // Close on Escape
+    document.addEventListener('keydown', e => {
+      if (e.key === 'Escape') closeConfirm();
+    });
+
+    async function deleteFile(name) {
+      try {
+        const r = await fetch('/api/files/delete', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ path: '/' + name })
+        }).then(r => r.json());
+
+        if (r.status === 'success') {
+          loadFiles();
+          fetchSystemInfo();
+        } else {
+          showStatus('error', `Delete failed: ${r.message || 'unknown error'}`);
+        }
+      } catch (e) {
+        showStatus('error', 'Delete failed - check connection.');
+      }
+    }
+
+    /* ── EVENTS ─────────────────────────────────────────────────────────── */
+    fileInput.addEventListener('change', () => {
+      if (fileInput.files.length) addFiles(fileInput.files);
+      fileInput.value = ''; // reset so same file can be re-added after removal
+    });
+
+    dropzone.addEventListener('dragover', e => {
+      e.preventDefault();
+      if (!isUploading) dropzone.classList.add('drag-over');
+    });
+
+    dropzone.addEventListener('dragleave', () => {
+      dropzone.classList.remove('drag-over');
+    });
+
+    dropzone.addEventListener('drop', e => {
+      e.preventDefault();
+      dropzone.classList.remove('drag-over');
+      if (!isUploading && e.dataTransfer?.files?.length) addFiles(e.dataTransfer.files);
+    });
+
+    uploadBtn.addEventListener('click', runUploadQueue);
+
+    /* ── INIT ────────────────────────────────────────────────────────────── */
+    fetchSystemInfo();
+    loadFiles();
+  </script>
+
+</body>
+</html>

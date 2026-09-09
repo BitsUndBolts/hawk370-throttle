@@ -1,0 +1,718 @@
+/* ═══════════════════════════════════════════════════════════
+   hawk370.css — HAWK 370 ThrottleBlaster shared styles
+   Linked by: index.html, files.html, setup.html
+   Retheme of AirMeter's design system: same variable names and
+   component classes, retro amber/green CRT palette per the
+   project's BIOS/POST-screen direction.
+   ═══════════════════════════════════════════════════════════ */
+
+/* ── DISPLAY / UI FONTS ──
+   Both faces are self-hosted from LittleFS (served by the ESP32 itself,
+   alongside hawk370.webp) rather than relying on local() lookups against
+   whatever happens to be installed on the viewing device. This guarantees
+   an identical look on any device, with or without internet access, since
+   the files never leave the local network. */
+@font-face {
+  font-family: 'VT323';
+  src: url('VT323_Regular.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'IBM Plex Mono';
+  src: url('ibm-plex-mono-v20-latin-regular.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* ── CSS VARIABLES ── */
+:root {
+  --bg:           #0c0f0b;
+  --panel:        #12160f;
+  --panel-2:      #171c14;
+  --border:       #2b2f27;
+  --border-bright:#46503c;
+
+  --accent:       #ffb000; /* amber — primary accent, replaces AirMeter's orange */
+  --accent-dim:   rgba(255, 176, 0, 0.10);
+  --accent-glow:  rgba(255, 176, 0, 0.24);
+
+  --green:        #4fbf67;
+  --green-dim:    rgba(79, 191, 103, 0.10);
+
+  --yellow:       #e8c547;
+  --red:          #ff5c5c;
+  --red-dim:      rgba(255, 92, 92, 0.10);
+
+  --blue:         #5fd3d3; /* cyan — kept as the "blue" role for file-icon/link parity with AirMeter */
+  --blue-dim:     rgba(95, 211, 211, 0.10);
+
+  --indigo:       #7c8f6e;
+  --purple:       #9c7fb0;
+  --lavender:     #b7a3d9;
+  --brown:        #8a7355;
+
+  --text:         #d9ddc8;
+  --text-2:       #8a9180;
+  --text-3:       #565c4e;
+
+  /* All UI chrome shares one monospace family — deliberate choice for the
+     terminal identity; --sans exists only so component rules that were
+     written against it (e.g. .btn-block) don't need touching. */
+  --mono: 'IBM Plex Mono', 'Consolas', ui-monospace, SFMono-Regular, Menlo,
+          Monaco, 'Liberation Mono', 'Courier New', monospace;
+  --sans: var(--mono);
+  --font-display: 'VT323', var(--mono);
+}
+
+/* ── RESET ── */
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+/* ── BASE ── */
+html {
+  font-size: clamp(7px, 1.8vw, 22px);
+}
+
+body {
+  font-family: var(--sans);
+  background: var(--bg);
+  color: var(--text);
+  margin: 0;
+  padding: 0;
+  min-height: 100dvh;
+  position: relative;
+  background-image:
+    linear-gradient(rgba(255, 176, 0, 0.025) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 176, 0, 0.025) 1px, transparent 1px);
+  background-size: 3.2em 3.2em;
+}
+
+/* ── CARD ── */
+.card {
+  width: 100%;
+  background: var(--panel);
+  border: 1px solid var(--border-bright);
+  border-radius: 0.4em;
+  overflow: hidden;
+}
+
+.card-header {
+  background: var(--panel-2);
+  border-bottom: 1px solid var(--border-bright);
+  padding: 1.4em 2em;
+  display: flex;
+  align-items: center;
+}
+
+.card-footer {
+  background: var(--panel-2);
+  border-top: 1px solid var(--border);
+  padding: 1em 2em;
+}
+
+.card-footer a,
+.card-footer a:visited,
+.card-footer a:active {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.card-footer a:hover {
+  text-decoration: underline;
+}
+
+/* ── FOOTER KEY-VALUE GRID ── */
+.footer-kv {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1em 1.4em;
+}
+
+.footer-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15em;
+}
+
+.footer-key {
+  font-family: var(--mono);
+  font-size: 0.9em;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-3);
+}
+
+.footer-val {
+  padding-top: 0.4em;
+  font-family: var(--mono);
+  font-size: 1.1em;
+  color: var(--text-2);
+}
+
+/* ── SECTION LABEL ── */
+.section-label {
+  font-family: var(--mono);
+  font-size: 0.9em;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--text-3);
+  padding: 1.6em 2em 0.8em;
+}
+
+/* ── HEADER BADGE (header left side) ── */
+.header-badge {
+  display: flex;
+  align-items: center;
+  gap: 1em;
+}
+
+.header-title {
+  font-family: var(--mono);
+  font-size: 1.2em;
+  font-weight: 600;
+  color: var(--text-2);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+/* ── HEADER RIGHT GROUP ── */
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 0.8em;
+}
+
+.header-tag {
+  font-family: var(--mono);
+  font-size: 1em;
+  letter-spacing: 0.07em;
+  color: var(--text-3);
+}
+
+.version-pill {
+  font-family: var(--mono);
+  font-size: 1em;
+  font-weight: 600;
+  color: var(--accent);
+  background: var(--accent-dim);
+  border: 1px solid var(--accent-glow);
+  border-radius: 0.3em;
+  padding: 0.2em 0.7em;
+  letter-spacing: 0.06em;
+}
+
+/* ── HOME BUTTON ── */
+.icon-btn {
+  margin-left: auto;
+  width: 2.8em;
+  height: 2.8em;
+  border-radius: 0.3em;
+  background: none;
+  border: 1px solid var(--border-bright);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: var(--text-3);
+  text-decoration: none;
+  transition: color 0.15s, border-color 0.15s, background 0.15s;
+  flex-shrink: 0;
+}
+
+.icon-btn:hover {
+  color: var(--text);
+  border-color: var(--text-2);
+  background: var(--panel);
+}
+
+.icon-btn svg {
+  width: 1.4em;
+  height: 1.4em;
+}
+
+/* ── STATUS DOT ── */
+.status-dot {
+  width: 0.8em;
+  height: 0.8em;
+  border-radius: 50%;
+  background: var(--dot-color);
+  box-shadow:
+    0 0 4px var(--dot-color),
+    0 0 12px var(--dot-color),
+    0 0 20px var(--dot-color);
+  animation: pulse-dot 2.5s ease-in-out infinite;
+  flex-shrink: 0;
+  transition: background 0.3s ease, box-shadow 0.3s ease;
+}
+
+.status-dot.green  { --dot-color: var(--green); }
+.status-dot.yellow { --dot-color: var(--yellow); }
+.status-dot.red    { --dot-color: var(--red); }
+
+@keyframes pulse-dot {
+  0%, 100% {
+    transform: scale(1);
+    box-shadow:
+      0 0 4px var(--dot-color),
+      0 0 12px var(--dot-color),
+      0 0 24px var(--dot-color);
+  }
+  50% {
+    transform: scale(0.92);
+    box-shadow:
+      0 0 2px var(--dot-color),
+      0 0 6px var(--dot-color),
+      0 0 10px var(--dot-color);
+  }
+}
+
+/* ── EMPTY STATE ── */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 1em 2em;
+  text-align: center;
+  gap: 0.8em;
+}
+
+.empty-state svg {
+  width: 4em;
+  height: 4em;
+  color: var(--text-3);
+  margin-bottom: 0.4em;
+}
+
+.empty-title {
+  font-family: var(--mono);
+  font-size: 1.2em;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-3);
+}
+
+.empty-desc {
+  font-size: 1.1em;
+  color: var(--text-3);
+  line-height: 1.5;
+  max-width: 28em;
+}
+
+/* ── INLINE SPINNER ── */
+.spinner-inline {
+  display: inline-block;
+  width: 1.4em;
+  height: 1.4em;
+  border: 0.2em solid var(--border-bright);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+  vertical-align: middle;
+  margin-right: 0.6em;
+}
+
+.spinner-inline.danger  { border-top-color: var(--red); }
+.spinner-inline.warning { border-top-color: var(--accent); }
+
+/* ── TOAST ── */
+.toast {
+  position: fixed;
+  bottom: 2em;
+  left: 50%;
+  transform: translateX(-50%) translateY(4em);
+  background: var(--panel-2);
+  border: 1px solid var(--border-bright);
+  border-radius: 0.4em;
+  padding: 0.9em 1.6em;
+  font-family: var(--mono);
+  font-size: 1.1em;
+  color: var(--text-2);
+  box-shadow: 0 0.8em 2.4em rgba(0, 0, 0, 0.6);
+  opacity: 0;
+  transition: transform 0.25s ease, opacity 0.25s ease;
+  pointer-events: none;
+  z-index: 200;
+  white-space: nowrap;
+}
+
+.toast.visible {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
+.toast.success { border-color: rgba(79, 191, 103, 0.35); color: var(--green); }
+.toast.fail    { border-color: rgba(255, 92, 92, 0.35);  color: var(--red); }
+
+/* ═══════════════════════════════════════════════════════════
+   BUTTON SYSTEM — unchanged structure from AirMeter, retimed.
+   ═══════════════════════════════════════════════════════════ */
+
+.btn {
+  font-family: var(--mono);
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  border: none;
+  border-radius: 0.3em;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5em;
+  white-space: nowrap;
+  text-decoration: none;
+  transition: opacity 0.15s, box-shadow 0.15s, background 0.15s,
+              border-color 0.15s, color 0.15s;
+}
+
+.btn:active:not(:disabled) { transform: scale(0.99); }
+.btn:disabled              { opacity: 0.4; cursor: not-allowed; }
+
+.btn-sm { font-size: 1em;   padding: 0.5em 1em; }
+.btn-md { font-size: 1.1em; padding: 0.65em 1.6em; }
+
+.btn-block {
+  display: flex;
+  width: 100%;
+  padding: 1.3em;
+  font-family: var(--sans);
+  font-size: 1.4em;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  justify-content: center;
+  text-align: center;
+  text-decoration: none;
+}
+
+.btn-block svg { width: 1.4em; height: 1.4em; flex-shrink: 0; }
+
+.btn-accent  { background: var(--accent); color: var(--bg); }
+.btn-danger  { background: var(--red);   color: var(--bg); }
+.btn-success { background: var(--green); color: var(--bg); }
+
+.btn-accent:not(:disabled):hover  { opacity: 0.88; box-shadow: 0 0 2em var(--accent-glow); }
+.btn-danger:not(:disabled):hover  { opacity: 0.88; }
+.btn-success:not(:disabled):hover { opacity: 0.88; box-shadow: 0 0 2em rgba(79, 191, 103, 0.3); }
+
+.btn-ghost {
+  background: var(--panel-2);
+  color: var(--text-2);
+  border: 1px solid var(--border-bright);
+}
+
+.btn-ghost:not(:disabled):hover {
+  background: var(--border);
+  color: var(--text);
+  border-color: var(--text-2);
+}
+
+.btn-outline-danger  { color: var(--red);    background: var(--red-dim);    border: 1px solid rgba(255, 92, 92, 0.25);  }
+.btn-outline-warning { color: var(--accent); background: var(--accent-dim); border: 1px solid var(--accent-glow);      }
+
+.btn-outline-danger:not(:disabled):hover  { background: rgba(255, 92, 92, 0.18);  border-color: rgba(255, 92, 92, 0.45); }
+.btn-outline-warning:not(:disabled):hover { background: var(--accent-glow);       border-color: var(--accent); }
+
+.btn-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6em;
+  font-family: var(--mono);
+  font-size: 1.1em;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-2);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  transition: color 0.15s;
+}
+
+.btn-back:hover          { color: var(--accent); }
+.btn-back svg            { width: 1.4em; height: 1.4em; transition: transform 0.15s; }
+.btn-back:hover svg      { transform: translateX(-0.2em); }
+
+.btn-scan {
+  font-family: var(--mono);
+  font-size: 1.1em;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent);
+  background: var(--accent-dim);
+  border: 1px solid rgba(255, 176, 0, 0.25);
+  border-radius: 0.3em;
+  padding: 0.5em 1em;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.btn-scan:not(:disabled):hover { background: rgba(255, 176, 0, 0.2); border-color: rgba(255, 176, 0, 0.45); }
+.btn-scan:disabled             { color: var(--text-3); background: transparent; border-color: var(--border); cursor: not-allowed; }
+
+.btn-icon {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 0.3em;
+  color: var(--text-3);
+  padding: 0.4em;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  text-decoration: none;
+  transition: color 0.15s, border-color 0.15s, background 0.15s;
+}
+
+.btn-icon svg { width: 1.25em; height: 1.25em; }
+
+.btn-icon.danger:hover { color: var(--red);  border-color: rgba(255, 92, 92, 0.4);  background: var(--red-dim);  }
+.btn-icon.blue:hover   { color: var(--blue); border-color: rgba(95, 211, 211, 0.4); background: var(--blue-dim); }
+
+/* ── STEP ROW / BADGE / TEXT ── */
+.step-row {
+  display: flex;
+  gap: 1.2em;
+  align-items: flex-start;
+  padding: 0.8em 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.step-row:last-child { border-bottom: none; padding-bottom: 0; }
+
+.step-num {
+  font-family: var(--mono);
+  font-size: 1em;
+  font-weight: 600;
+  color: var(--accent);
+  background: var(--accent-dim);
+  border: 1px solid rgba(255, 176, 0, 0.2);
+  border-radius: 0.2em;
+  width: 2em;
+  height: 2em;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.step-text           { font-size: 1.3em; color: var(--text-2); line-height: 1.5; padding-top: 0.15em; }
+.step-text strong    { color: var(--text); font-weight: 600; }
+.step-text a         { color: var(--accent); text-decoration: none; font-family: var(--mono); font-size: 0.92em; }
+.step-text a:hover   { text-decoration: underline; }
+
+/* ── DIVIDER ── */
+.divider {
+  height: 1px;
+  background: var(--border);
+  margin: 0.6em 0;
+}
+
+/* ── UTILITY ── */
+.hidden {
+  display: none !important;
+}
+
+/* ── ANIMATIONS ── */
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ── HEADER LOGO ── */
+.header-logo {
+  height: 2.5em;
+  width: auto;
+  object-fit: contain;
+  aspect-ratio: 180 / 80;
+  animation: breathe 10s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+@keyframes breathe {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50%       { transform: scale(1.1); }
+}
+
+/* ── UNIFIED MODAL SYSTEM ── */
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.75);
+  backdrop-filter: blur(2px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2em;
+  z-index: 300;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.18s ease;
+}
+
+.modal-overlay.visible {
+  opacity: 1;
+  pointer-events: all;
+}
+
+.modal {
+  background: var(--panel);
+  border: 1px solid var(--border-bright);
+  border-radius: 0.4em;
+  width: min(92vw, 34em);
+  overflow: hidden;
+  box-shadow: 0 2.4em 6.4em rgba(0, 0, 0, 0.75);
+  display: flex;
+  flex-direction: column;
+  transform: scale(0.95) translateY(0.5em);
+  transition: transform 0.18s ease;
+}
+
+.modal-overlay.visible .modal {
+  transform: scale(1) translateY(0);
+}
+
+.modal-header {
+  background: var(--panel-2);
+  border-bottom: 1px solid var(--border-bright);
+  padding: 1.4em 1.6em;
+  display: flex;
+  align-items: center;
+  gap: 1em;
+}
+
+.modal-icon {
+  width: 2.8em;
+  height: 2.8em;
+  border-radius: 0.3em;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  background: var(--panel-3, rgba(255, 176, 0, 0.05));
+  border: 1px solid var(--border-bright);
+  color: var(--text);
+}
+
+.modal-icon.danger {
+  background: var(--red-dim);
+  border: 1px solid rgba(255, 92, 92, 0.25);
+  color: var(--red);
+}
+
+.modal-icon.warning {
+  background: var(--accent-dim);
+  border: 1px solid var(--accent-glow);
+  color: var(--accent);
+}
+
+.modal-icon svg {
+  width: 1.4em;
+  height: 1.4em;
+}
+
+.modal-title {
+  font-family: var(--mono);
+  font-size: 1.2em;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text);
+}
+
+.modal-title.danger { color: var(--red); }
+.modal-title.warning { color: var(--accent); }
+
+.modal-body {
+  padding: 1.8em 1.6em;
+  font-size: 1.2em;
+  color: var(--text-2);
+  line-height: 1.6;
+}
+
+.modal-body p {
+  margin-bottom: 1.6em;
+  font-size: inherit;
+  color: inherit;
+}
+
+.modal-body p:last-child {
+  margin-bottom: 0;
+}
+
+.modal-filename {
+  font-family: var(--mono);
+  color: var(--text);
+  background: var(--panel-2);
+  border: 1px solid var(--border-bright);
+  border-radius: 0.25em;
+  padding: 0.15em 0.45em;
+  font-size: 0.95em;
+  word-break: break-all;
+}
+
+.modal-actions {
+  display: flex;
+  gap: 0.8em;
+  margin-top: 1.6em;
+}
+
+.btn-cancel,
+.btn-confirm {
+  flex: 1;
+  font-family: var(--mono);
+  font-size: 1.1em;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 0.9em 1.4em;
+  border-radius: 0.3em;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  text-align: center;
+}
+
+.btn-cancel {
+  color: var(--text-2);
+  background: var(--panel-2);
+  border: 1px solid var(--border-bright);
+}
+
+.btn-cancel:hover {
+  color: var(--text);
+  background: var(--border);
+  border-color: var(--text-2);
+}
+
+.btn-confirm {
+  border: none;
+  color: var(--bg);
+  background: var(--border-bright);
+}
+
+.btn-confirm.danger {
+  color: var(--bg);
+  background: var(--red);
+}
+
+.btn-confirm.warning {
+  color: var(--bg);
+  background: var(--accent);
+}
+
+.btn-confirm:hover {
+  opacity: 0.88;
+}
