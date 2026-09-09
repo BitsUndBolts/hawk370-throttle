@@ -233,9 +233,15 @@
     .volt-value .v { font-size: 0.5em; color: var(--accent-solid-dim); }
 
     svg.spark { display: block; width: 100%; height: 2.6em; overflow: visible; }
-    .spark-grid-line { stroke: var(--border); stroke-width: 1; }
-    .spark-line { fill: none; stroke: var(--blue); stroke-width: 1.5; }
+    .spark-line {
+      fill: none; stroke: var(--blue); stroke-width: 1.5;
+      vector-effect: non-scaling-stroke;
+      stroke-linejoin: round; stroke-linecap: round; /* cleans up the joints too */
+    }
     .spark-fill { fill: rgba(95, 211, 211, 0.08); stroke: none; }
+    .spark-wrap { position: relative; }
+    .spark-zero-line { stroke: var(--text-3); stroke-width: 1; stroke-dasharray: 2 2; opacity: 0.6; vector-effect: non-scaling-stroke; }
+    .spark-zero-label { position: absolute; left: 0; bottom: -0.2em; font-family: var(--mono); font-size: 0.65em; color: var(--text-3); line-height: 1; pointer-events: none; }
 
     /* ── DEVICE CONTROLS (ported from AirMeter) ── */
     .controls-section { padding: 0 1.2em 0.8em; }
@@ -331,7 +337,7 @@
         <div class="mhz-field">
           <label for="base-mhz">Base Clock (MHz)</label>
           <div class="mhz-input-wrap">
-            <input type="number" id="base-mhz" min="1" max="9999" step="1" inputmode="numeric" autocomplete="off">
+            <input type="number" id="base-mhz" min="1" max="9999" step="1" inputmode="numeric" autocomplete="off" oninput="if (this.value.length > 4) this.value = this.value.slice(0, 4);">
             <div class="mhz-steppers">
               <button type="button" class="mhz-step" id="mhz-up" tabindex="-1" aria-label="Increase base clock">▲</button>
               <button type="button" class="mhz-step" id="mhz-down" tabindex="-1" aria-label="Decrease base clock">▼</button>
@@ -366,25 +372,30 @@
     <div class="section-label">Power Rails</div>
     <div class="panel">
       <div class="volt-grid">
-
         <div class="volt-card">
           <div class="volt-name">VCORE <span class="tag">●</span></div>
           <div class="volt-value"><span id="vcore-value">--</span><span class="v">V</span></div>
-          <svg class="spark" viewBox="0 0 200 40" preserveAspectRatio="none">
-            <line class="spark-grid-line" x1="0" y1="20" x2="200" y2="20"/>
-            <polygon class="spark-fill" id="vcore-spark-fill" points=""/>
-            <polyline class="spark-line" id="vcore-spark-line" points=""/>
-          </svg>
+          <div class="spark-wrap">
+            <svg class="spark" viewBox="0 0 200 40" preserveAspectRatio="none">
+              <line class="spark-zero-line" x1="0" y1="37" x2="200" y2="37"/>
+              <polygon class="spark-fill" id="vcore-spark-fill" points="" />
+              <polyline class="spark-line" id="vcore-spark-line" points="" />
+            </svg>
+            <span class="spark-zero-label">0V</span>
+          </div>
         </div>
 
         <div class="volt-card">
           <div class="volt-name">VTT <span class="tag">●</span></div>
           <div class="volt-value"><span id="vtt-value">--</span><span class="v">V</span></div>
-          <svg class="spark" viewBox="0 0 200 40" preserveAspectRatio="none">
-            <line class="spark-grid-line" x1="0" y1="20" x2="200" y2="20"/>
-            <polygon class="spark-fill" id="vtt-spark-fill" points=""/>
-            <polyline class="spark-line" id="vtt-spark-line" points=""/>
-          </svg>
+          <div class="spark-wrap">
+            <svg class="spark" viewBox="0 0 200 40" preserveAspectRatio="none">
+              <line class="spark-zero-line" x1="0" y1="37" x2="200" y2="37"/>
+              <polygon class="spark-fill" id="vtt-spark-fill" points="" />
+              <polyline class="spark-line" id="vtt-spark-line" points="" />
+            </svg>
+            <span class="spark-zero-label">0V</span>
+          </div>
         </div>
 
       </div>
@@ -788,7 +799,10 @@
 
     function renderSpark(name, hist) {
       if (hist.length < 2) return;
-      const min = Math.min(...hist), max = Math.max(...hist);
+      // Rails are never negative — anchor the bottom to a real 0V.
+      // Only the top (max) autoscales to the recent peak.
+      const min = 0;
+      const max = Math.max(...hist) || 0.01;
       const range = (max - min) || 0.01;
       const w = 200, h = 40, pad = 3;
       const step = w / (VOLT_HISTORY_LEN - 1);

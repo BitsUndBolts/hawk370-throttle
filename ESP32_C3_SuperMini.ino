@@ -5,7 +5,7 @@
 
 // =============================================================================
 // HAWK 370 Wireless ThrottleBlaster — ESP32-C3 SuperMini Firmware
-// Firmware Version: 0.1.0  (pre-bring-up — see TODO(bench) / TODO(bring-up))
+// Firmware Version: 0.1  (pre-bring-up — see TODO(bench) / TODO(bring-up))
 //
 // Wireless Socket 370 CPU throttle controller (Mendocino / Coppermine /
 // Tualatin / VIA C3), built for the HAWK 370 board. Web server, Wi-Fi
@@ -58,7 +58,7 @@
 // FIRMWARE METADATA
 // =============================================================================
 
-const char* FIRMWARE_VERSION = "0.1.1";
+const char* FIRMWARE_VERSION = "0.1";
 
 // =============================================================================
 // HARDWARE CONFIGURATION — STPCLK# / RMT
