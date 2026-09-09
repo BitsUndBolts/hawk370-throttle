@@ -242,6 +242,8 @@
     .spark-wrap { position: relative; }
     .spark-zero-line { stroke: var(--text-3); stroke-width: 1; stroke-dasharray: 2 2; opacity: 0.6; vector-effect: non-scaling-stroke; }
     .spark-zero-label { position: absolute; left: 0; bottom: -0.2em; font-family: var(--mono); font-size: 0.65em; color: var(--text-3); line-height: 1; pointer-events: none; }
+    .spark-current-line { stroke: var(--accent); stroke-width: 1; stroke-dasharray: 3 2; opacity: 0.85; vector-effect: non-scaling-stroke; }
+    .spark-current-label { position: absolute; right: 0; top: 0; transform: translateY(-50%); font-family: var(--mono); font-size: 0.65em; color: var(--accent); line-height: 1; pointer-events: none; white-space: nowrap; background: var(--panel-2); padding-left: 0.3em; }
 
     /* ── DEVICE CONTROLS (ported from AirMeter) ── */
     .controls-section { padding: 0 1.2em 0.8em; }
@@ -380,8 +382,10 @@
               <line class="spark-zero-line" x1="0" y1="37" x2="200" y2="37"/>
               <polygon class="spark-fill" id="vcore-spark-fill" points="" />
               <polyline class="spark-line" id="vcore-spark-line" points="" />
+              <line class="spark-current-line" id="vcore-spark-current" x1="0" y1="37" x2="200" y2="37"/>
             </svg>
             <span class="spark-zero-label">0V</span>
+            <span class="spark-current-label" id="vcore-spark-current-label"></span>
           </div>
         </div>
 
@@ -393,8 +397,10 @@
               <line class="spark-zero-line" x1="0" y1="37" x2="200" y2="37"/>
               <polygon class="spark-fill" id="vtt-spark-fill" points="" />
               <polyline class="spark-line" id="vtt-spark-line" points="" />
+              <line class="spark-current-line" id="vtt-spark-current" x1="0" y1="37" x2="200" y2="37"/>
             </svg>
             <span class="spark-zero-label">0V</span>
+            <span class="spark-current-label" id="vtt-spark-current-label"></span>
           </div>
         </div>
 
@@ -799,8 +805,6 @@
 
     function renderSpark(name, hist) {
       if (hist.length < 2) return;
-      // Rails are never negative — anchor the bottom to a real 0V.
-      // Only the top (max) autoscales to the recent peak.
       const min = 0;
       const max = Math.max(...hist) || 0.01;
       const range = (max - min) || 0.01;
@@ -816,6 +820,18 @@
 
       $(name + '-spark-line').setAttribute('points', line);
       $(name + '-spark-fill').setAttribute('points', `${startX.toFixed(1)},${h} ${line} ${w},${h}`);
+
+      // ── Current-value tracker line/label ──
+      const latest = hist[hist.length - 1];
+      const yCurrent = h - pad - ((latest - min) / range) * (h - pad * 2);
+
+      const curLine = $(name + '-spark-current');
+      curLine.setAttribute('y1', yCurrent.toFixed(1));
+      curLine.setAttribute('y2', yCurrent.toFixed(1));
+
+      const curLabel = $(name + '-spark-current-label');
+      curLabel.style.top = ((yCurrent / h) * 100 + 20).toFixed(1) + '%';
+      curLabel.textContent = latest.toFixed(2) + 'V';
     }
 
     function pushVoltage(name, value) {
