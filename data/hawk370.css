@@ -8,7 +8,7 @@
 
 /* ── DISPLAY / UI FONTS ──
    Both faces are self-hosted from LittleFS (served by the ESP32 itself,
-   alongside hawk370.webp) rather than relying on local() lookups against
+   alongside hawk370_transparent.webp) rather than relying on local() lookups against
    whatever happens to be installed on the viewing device. This guarantees
    an identical look on any device, with or without internet access, since
    the files never leave the local network. */
