@@ -88,6 +88,10 @@ The STPCLK# waveform is generated once and looped entirely in RMT hardware, so W
 
 Web server, Wi‑Fi provisioning, mDNS, and OTA subsystems are adapted from my earlier [**AirMeter**](https://github.com/BitsUndBolts/airmeter) project.
 
+ScrapComputing [**ThrottleBlaster**](https://github.com/scrapcomputing/ThrottleBlaster) Project
+
+RetroLoom [**PWM2STPCLK**](https://github.com/RetroLoom/PWM2STPCLK) Project
+
 ## License
 
 MIT © 2026
