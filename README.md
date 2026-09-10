@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="data/hawk370.webp" alt="HAWK 370 Logo" width="180"><br>
+  <img src="data/hawk370_transparent.webp" alt="HAWK 370 Logo" width="180"><br>
 </p>
 
 <h1 align="center">HAWK 370 · Wireless ThrottleBlaster</h1>
