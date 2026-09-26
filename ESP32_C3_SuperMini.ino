@@ -4,7 +4,7 @@
  */
 
 // =============================================================================
-// HAWK 370 Wireless ThrottleBlaster — ESP32-C3 SuperMini Firmware 0.3
+// HAWK 370 Wireless ThrottleBlaster — ESP32-C3 SuperMini Firmware 0.4
 //
 // Wireless Socket 370 CPU throttle controller (Mendocino / Coppermine /
 // Tualatin / VIA C3) for the HAWK 370 Slotket. Web server, Wi-Fi provisioning,
@@ -19,6 +19,7 @@
 //   hawk_config.h     pins, polarity, network identity
 //   hawk_pattern.*    STPCLK# timing maths (pure, host-tested: test/)
 //   hawk_throttle.*   RMT output, glitch-free switching, Pause, CPU families
+//   hawk_presets.*    user speed presets per CPU family (LittleFS, host-tested)
 //   hawk_rails.*      VCORE / VTT monitoring
 //   hawk_net.*        Wi-Fi modes, setup wizard backend, background reconnect
 //   hawk_web.*        REST API, SSE, OTA (firmware + LittleFS image), files

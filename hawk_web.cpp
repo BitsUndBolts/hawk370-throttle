@@ -8,6 +8,7 @@
 #include "hawk_net.h"
 #include "hawk_rails.h"
 #include "hawk_throttle.h"
+#include "hawk_presets.h"
 
 #include <WiFi.h>
 #include <Update.h>
@@ -299,10 +300,10 @@ static void removeStaleTempFiles() {
 
 // ── Route helpers ────────────────────────────────────────────────────────────
 
-static void onJsonPost(const char* uri, ArJsonRequestHandlerFunction fn) {
+static void onJsonPost(const char* uri, ArJsonRequestHandlerFunction fn, int maxBody = 1024) {
   AsyncCallbackJsonWebHandler* h = new AsyncCallbackJsonWebHandler(uri, fn);
   h->setMethod(HTTP_POST);
-  h->setMaxContentLength(1024);
+  h->setMaxContentLength(maxBody);
   server.addHandler(h);
 }
 
@@ -482,6 +483,7 @@ static void setupRoutes() {
       JsonObject e = arr.add<JsonObject>();
       e["id"]       = i;
       e["name"]     = CPU_FAMILIES[i].name;
+      e["slug"]     = CPU_FAMILIES[i].slug;
       e["verified"] = CPU_FAMILIES[i].benchVerified;
       e["wMinUs"]   = CPU_FAMILIES[i].timing.wMinUs;
       e["periodUs"] = CPU_FAMILIES[i].timing.periodUs;
@@ -529,6 +531,79 @@ static void setupRoutes() {
     fillThrottle(doc.as<JsonObject>(), s);
     sendJson(request, 200, doc);
   });
+
+  // ── Presets (per CPU family, stored as effective MHz) ────────────────
+  server.on("/api/presets", HTTP_GET, [](AsyncWebServerRequest* request) {
+    const int family = request->hasParam("family") ? request->getParam("family")->value().toInt() : -1;
+    if (family < 0 || family >= FAMILY_COUNT) {
+      sendStatus(request, 400, "error", "family out of range");
+      return;
+    }
+    JsonDocument doc;
+    doc["family"]     = family;
+    doc["familyName"] = CPU_FAMILIES[family].name;
+    doc["familySlug"] = CPU_FAMILIES[family].slug;
+    doc["max"]        = PRESETS_MAX_PER_FAMILY;
+    if (!presetsList((uint8_t) family, doc["presets"].to<JsonArray>())) {
+      sendStatus(request, 503, "error", presetResultText(PRESET_STORAGE_ERROR));
+      return;
+    }
+    sendJson(request, 200, doc);
+  });
+
+  // body: { family, name, mhz, refBaseMhz, originalName? }  (originalName = edit)
+  onJsonPost("/api/presets/save", [](AsyncWebServerRequest* request, JsonVariant& json) {
+    if (!json["family"].is<int>() || !json["mhz"].is<int>() || !json["name"].is<const char*>()) {
+      sendStatus(request, 400, "error", "Expected family, name and mhz");
+      return;
+    }
+    const int family = json["family"].as<int>();
+    const int mhz    = json["mhz"].as<int>();
+    const int ref    = json["refBaseMhz"] | 0;
+    if (family < 0 || family >= FAMILY_COUNT || mhz < 1 || mhz > PRESET_MHZ_MAX || ref < 0 || ref > PRESET_MHZ_MAX) {
+      sendStatus(request, 400, "error", presetResultText(PRESET_INVALID));
+      return;
+    }
+    const PresetResult r = presetsSave((uint8_t) family, json["name"].as<String>(), (uint16_t) mhz,
+                                       (uint16_t) ref, json["originalName"] | "");
+    const int code = r == PRESET_OK ? 200 : r == PRESET_NAME_TAKEN ? 409 : r == PRESET_NOT_FOUND ? 404 :
+                     r == PRESET_FULL ? 507 : r == PRESET_INVALID ? 400 : 500;
+    sendStatus(request, code, r == PRESET_OK ? "success" : "error", r == PRESET_OK ? nullptr : presetResultText(r));
+  });
+
+  // body: { family, name }
+  onJsonPost("/api/presets/delete", [](AsyncWebServerRequest* request, JsonVariant& json) {
+    const int family = json["family"] | -1;
+    if (family < 0 || family >= FAMILY_COUNT || !json["name"].is<const char*>()) {
+      sendStatus(request, 400, "error", "Expected family and name");
+      return;
+    }
+    const PresetResult r = presetsDelete((uint8_t) family, json["name"].as<String>());
+    sendStatus(request, r == PRESET_OK ? 200 : r == PRESET_NOT_FOUND ? 404 : 500,
+               r == PRESET_OK ? "success" : "error", r == PRESET_OK ? nullptr : presetResultText(r));
+  });
+
+  // body: { family, presets: [{name, mhz, refBaseMhz}] } — merge by name.
+  // The browser splits an export file by family and sends one call each.
+  onJsonPost("/api/presets/import", [](AsyncWebServerRequest* request, JsonVariant& json) {
+    const int family = json["family"] | -1;
+    if (family < 0 || family >= FAMILY_COUNT || !json["presets"].is<JsonArrayConst>()) {
+      sendStatus(request, 400, "error", "Expected family and a presets array");
+      return;
+    }
+    PresetImportStats stats;
+    const PresetResult r = presetsImport((uint8_t) family, json["presets"].as<JsonArrayConst>(), stats);
+    if (r != PRESET_OK) {
+      sendStatus(request, 500, "error", presetResultText(r));
+      return;
+    }
+    JsonDocument doc;
+    doc["status"]  = "success";
+    doc["added"]   = stats.added;
+    doc["updated"] = stats.updated;
+    doc["skipped"] = stats.skipped;
+    sendJson(request, 200, doc);
+  }, 32768);
 
   server.on("/api/telemetry", HTTP_GET, [](AsyncWebServerRequest* request) {
     request->send(200, "application/json", telemetryJson());
@@ -611,6 +686,7 @@ void webBegin(bool littlefsMounted) {
   littlefsOk = littlefsMounted;
   bootId     = esp_random() | 1;   // never 0
   if (littlefsOk) removeStaleTempFiles();
+  presetsBegin(littlefsOk);
   setupRoutes();
   server.begin();
   Serial.println("[SYSTEM] Web server started.");
@@ -632,6 +708,16 @@ void webTick() {
   if (v != lastThrottleVersion) {
     lastThrottleVersion = v;
     events.send(throttleJson().c_str(), "throttle", now);
+  }
+
+  // Another browser changed presets: tell everyone which family to reload.
+  static uint32_t lastPresetsRev = 0;
+  const uint32_t pr = presetsRevision();
+  if (pr != lastPresetsRev) {
+    lastPresetsRev = pr;
+    char msg[32];
+    snprintf(msg, sizeof(msg), "{\"family\":%u}", (unsigned) presetsLastFamily());
+    events.send(msg, "presets", now);
   }
 
   static uint32_t lastTelemetry = 0;

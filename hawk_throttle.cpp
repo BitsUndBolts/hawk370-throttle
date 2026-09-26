@@ -44,12 +44,12 @@ using namespace hawk;
 
 // Same Intel-referenced timing for every family until bench data says otherwise.
 const CpuFamilyInfo CPU_FAMILIES[FAMILY_COUNT] = {
-  /* MENDOCINO    */ { "Mendocino",    DEFAULT_TIMING, false },
-  /* COPPERMINE   */ { "Coppermine",   DEFAULT_TIMING, false },
-  /* TUALATIN     */ { "Tualatin",     DEFAULT_TIMING, false },
-  /* VIA_SAMUEL   */ { "VIA Samuel",   DEFAULT_TIMING, false },
-  /* VIA_EZRA     */ { "VIA Ezra",     DEFAULT_TIMING, false },
-  /* VIA_NEHEMIAH */ { "VIA Nehemiah", DEFAULT_TIMING, false },
+  /* MENDOCINO    */ { "Mendocino",    "mendocino",    DEFAULT_TIMING, false },
+  /* COPPERMINE   */ { "Coppermine",   "coppermine",   DEFAULT_TIMING, false },
+  /* TUALATIN     */ { "Tualatin",     "tualatin",     DEFAULT_TIMING, false },
+  /* VIA_SAMUEL   */ { "VIA Samuel",   "via-samuel",   DEFAULT_TIMING, false },
+  /* VIA_EZRA     */ { "VIA Ezra",     "via-ezra",     DEFAULT_TIMING, false },
+  /* VIA_NEHEMIAH */ { "VIA Nehemiah", "via-nehemiah", DEFAULT_TIMING, false },
 };
 
 static const char*    NVS_NAMESPACE        = "throttle";

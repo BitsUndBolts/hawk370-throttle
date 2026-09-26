@@ -28,6 +28,7 @@ enum CpuFamily : uint8_t {
 
 struct CpuFamilyInfo {
   const char*         name;
+  const char*         slug;            // stable id for files and exports (never reorder-dependent)
   hawk::PatternTiming timing;
   bool                benchVerified;   // false until confirmed on real hardware
 };

@@ -25,6 +25,7 @@
 
 - **Two Wi‑Fi modes, one setup wizard** - join your home/lab network (STA), or run entirely standalone as its own access point (`HAWK370-Setup`) for bench use with no router required.
 - **Live throttle control** - drag the slider, use the 25 / 50 / 75 / 100 % presets, or click the MHz readout to type an exact value (Enter or a click outside applies it, Esc cancels). Keyboard: ← / → ±1 MHz, Shift ±10 MHz, 1–4 for the presets. The browser tab shows the live speed. The readout shows the speed the CPU actually gets. Resolution is about 0.03% from ~0.1% to ~99.9% of the base clock.
+- **Your own presets** - save speeds like "386DX-40 = 25 MHz" per CPU family, up to 128 each, in a searchable A-Z dropdown. A preset stores the effective MHz, so one measured on a Tualatin 1400 gives the same speed on a Tualatin 1133 (the firmware just recomputes the duty). Rename, edit, delete, and export/import everything as one JSON file to share with others (import merges by name).
 - **Pause at 0 MHz** - holds STPCLK# asserted; the CPU resumes exactly where it stopped when you move the slider. Power‑on is always full speed, so the PC always POSTs.
 - **Intel‑referenced timing** - in the middle of the range the STPCLK# pattern uses the same 244 µs period as the 440BX chipset's own throttle, with continuous duty; outside it the short phase stays at 32 µs and the period stretches. Speed changes are glitch‑free: no STPCLK# phase is ever shorter than 32 µs.
 - **Real‑time voltage & temperature telemetry** - VCORE and VTT rails streamed over Server‑Sent Events with live sparkline graphs, extensible to temperature monitoring.
@@ -78,6 +79,10 @@ On dual‑CPU boards only one HAWK 370 needs an ESP32: the 440BX chipset has a s
 | `/api/throttle` | GET | Family, base clock, requested %, delivered % and MHz, paused |
 | `/api/throttle/config` | POST | Set CPU family + base clock: `{"family":2,"baseMhz":1400}` |
 | `/api/throttle/speed` | POST | Set speed: `{"speedPercent":25}` (0 = Pause, 100 = full speed) |
+| `/api/presets?family=2` | GET | Presets of one CPU family, A-Z |
+| `/api/presets/save` | POST | Create or edit: `{"family":2,"name":"386DX-40","mhz":25,"refBaseMhz":1400,"originalName":"…"}` |
+| `/api/presets/delete` | POST | `{"family":2,"name":"386DX-40"}` |
+| `/api/presets/import` | POST | Merge `{"family":2,"presets":[…]}` (the dashboard splits export files by family) |
 | `/api/telemetry` | GET | One‑shot voltage/temp/RSSI/memory snapshot |
 | `/events` | SSE | `telemetry` every ~500 ms, `throttle` on every change (keeps several browsers in sync) |
 | `/api/system` | GET | Firmware version, IP, SSID, storage usage |
@@ -97,13 +102,16 @@ On dual‑CPU boards only one HAWK 370 needs an ESP32: the 440BX chipset has a s
 | `hawk_config.h` | Pins, STPCLK# polarity, network identity |
 | `hawk_pattern.*` | STPCLK# timing maths - pure C++, tested on a PC |
 | `hawk_throttle.*` | RMT output, glitch‑free switching, Pause, CPU families |
+| `hawk_presets.*` | User presets per CPU family, stored in LittleFS under `/presets/` |
 | `hawk_rails.*` | VCORE / VTT monitoring |
 | `hawk_net.*` | Wi‑Fi modes, setup wizard, background reconnect |
 | `hawk_web.*` | REST API, SSE, OTA, file manager |
 
 Web handlers only post requests; every pin, RMT, radio and NVS change happens in `loop()`.
 
-Run the modulator tests on a PC with `sh test/run_tests.sh` (needs g++ or clang++). They sweep every speed and base clock and check that no phase is shorter than the minimum and the delivered speed matches the request.
+Run the tests on a PC with `sh test/run_tests.sh` (needs g++ or clang++). The modulator test sweeps every speed and base clock and checks that no phase is shorter than the minimum and the delivered speed matches the request. The preset test (needs ArduinoJson, found automatically or via `ARDUINOJSON_SRC`) covers saving, renaming, merging imports and the 128-per-family limit.
+
+Presets live in LittleFS. Flashing a storage image from the Files page backs them up in the browser and restores them after the reboot; if you flash LittleFS over USB instead, export your presets first.
 
 ## Acknowledgements
 

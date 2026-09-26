@@ -13,7 +13,7 @@
 #include "driver/gpio.h"
 #include "hal/adc_types.h"
 
-#define HAWK_FIRMWARE_VERSION "0.3"
+#define HAWK_FIRMWARE_VERSION "0.4"
 
 // ── STPCLK# drive ────────────────────────────────────────────────────────────
 // GPIO7 drives the gate of the onboard 2N7002; its drain pulls STPCLK# to VSS.

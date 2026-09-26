@@ -203,6 +203,47 @@
       appearance: textfield;
     }
     .preset-row { margin-top: 1.1em; }
+
+    /* ── USER PRESETS (searchable dropdown) ── */
+    .user-presets { display: flex; justify-content: center; margin-top: 0.9em; }
+    .preset-select { flex: 0 1 26em; min-width: 16em; text-align: left; }
+    .preset-select .select-trigger { font-size: 0.95em; padding: 0.6em 2.2em 0.6em 0.9em; }
+    #preset-label .muted { color: var(--text-3); }
+    .preset-menu { max-height: 22em; display: flex; flex-direction: column; overflow: hidden; }
+    .preset-menu.hidden { display: none; }
+    .preset-search-wrap { padding: 0.5em; border-bottom: 1px solid var(--border); }
+    .preset-search-wrap input, .field input {
+      width: 100%; background: var(--bg); border: 1px solid var(--border-bright); color: var(--text);
+      font-family: var(--mono); font-size: 0.95em; padding: 0.5em 0.7em; outline: none;
+    }
+    .preset-search-wrap input:focus, .field input:focus { border-color: var(--accent); }
+    #preset-list { overflow-y: auto; flex: 1; scrollbar-width: thin; scrollbar-color: var(--border-bright) transparent; }
+    .preset-option { display: flex; align-items: center; gap: 0.8em; font-size: 0.95em; }
+    .preset-option .preset-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .preset-option .preset-mhz { color: var(--text-3); white-space: nowrap; }
+    .preset-option.over .preset-mhz { color: var(--yellow); }
+    .preset-option.focused { background: rgba(255, 255, 255, 0.06); color: var(--text); }
+    .preset-edit {
+      background: none; border: 1px solid transparent; color: var(--text-3); cursor: pointer;
+      font-family: var(--mono); font-size: 0.85em; padding: 0.15em 0.45em;
+    }
+    .preset-edit:hover { color: var(--accent); border-color: var(--border-bright); }
+    .preset-empty { padding: 0.9em 1em; color: var(--text-3); font-size: 0.9em; }
+    .preset-menu-footer { display: flex; border-top: 1px solid var(--border-bright); }
+    .preset-action {
+      flex: 1; background: none; border: none; color: var(--text-2); cursor: pointer;
+      font-family: var(--mono); font-size: 0.8em; padding: 0.7em 0.4em;
+    }
+    .preset-action + .preset-action { border-left: 1px solid var(--border); }
+    .preset-action:hover { color: var(--accent); background: var(--accent-dim); }
+    .field { display: flex; flex-direction: column; gap: 0.35em; margin-bottom: 1em; }
+    .field label { font-family: var(--mono); font-size: 0.7em; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text-3); }
+    .field .hint { font-size: 0.75em; color: var(--text-3); }
+    .field-row { display: flex; gap: 1em; }
+    .field-row .field { flex: 1; }
+    .preset-error { color: var(--red); font-size: 0.85em; min-height: 1.2em; margin-bottom: 0.6em; }
+    .btn-delete-preset { color: var(--red); border-color: rgba(255, 92, 92, 0.35); }
+    .btn-delete-preset:hover { background: var(--red-dim); color: var(--red); }
     .reset-probe { margin-top: 1em; font-size: 0.85em; color: var(--text-3); }
     .preset-row .freq-btn { min-width: 4.4em; }
     .readout-input::-webkit-outer-spin-button,
@@ -373,6 +414,25 @@
           <button type="button" class="freq-btn" data-pct="75">75%</button>
           <button type="button" class="freq-btn" data-pct="100">100%</button>
         </span>
+      </div>
+      <div class="user-presets">
+        <div class="select-wrap preset-select" id="preset-select">
+          <button type="button" class="select-trigger" id="preset-trigger" aria-haspopup="listbox" aria-expanded="false">
+            <span id="preset-label"><span class="muted">My presets</span></span>
+          </button>
+          <div class="select-menu preset-menu hidden" id="preset-menu">
+            <div class="preset-search-wrap">
+              <input type="search" id="preset-search" placeholder="Search presets…" autocomplete="off" spellcheck="false" aria-label="Search presets">
+            </div>
+            <div id="preset-list" role="listbox"></div>
+            <div class="preset-menu-footer">
+              <button type="button" class="preset-action" id="preset-add">+ Save current</button>
+              <button type="button" class="preset-action" id="preset-export">Export all</button>
+              <button type="button" class="preset-action" id="preset-import">Import…</button>
+            </div>
+          </div>
+        </div>
+        <input type="file" id="preset-file" accept=".json,application/json" hidden>
       </div>
 
       <div class="slider-block">
@@ -580,6 +640,41 @@
     </div>
   </div>
 
+  <!-- ── PRESET EDITOR ── -->
+  <div class="modal-overlay" id="preset-modal-overlay">
+    <div class="modal">
+      <div class="modal-header">
+        <div class="modal-icon warning">
+          <svg viewBox="0 0 14 14" fill="none"><path d="M2 12h2.5L11 5.5 8.5 3 2 9.5V12zM7.5 4l2.5 2.5" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/></svg>
+        </div>
+        <span class="modal-title warning" id="preset-modal-title">New Preset</span>
+      </div>
+      <div class="modal-body">
+        <div class="field">
+          <label for="preset-name">Name</label>
+          <input type="text" id="preset-name" maxlength="40" autocomplete="off" spellcheck="false" placeholder="e.g. 386DX-40">
+        </div>
+        <div class="field-row">
+          <div class="field">
+            <label for="preset-mhz">Effective MHz</label>
+            <input type="text" id="preset-mhz" inputmode="numeric" maxlength="4" autocomplete="off">
+          </div>
+          <div class="field">
+            <label for="preset-ref">Measured on (base MHz)</label>
+            <input type="text" id="preset-ref" inputmode="numeric" maxlength="4" autocomplete="off">
+          </div>
+        </div>
+        <div class="field"><span class="hint" id="preset-family-hint"></span></div>
+        <div class="preset-error" id="preset-error"></div>
+        <div class="modal-actions">
+          <button class="btn-cancel btn-delete-preset hidden" id="preset-delete">Delete</button>
+          <button class="btn-cancel" onclick="closePresetModal()">Cancel</button>
+          <button class="btn-confirm warning" id="preset-save">Save</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <div class="toast" id="toast"></div>
 
   <script>
@@ -596,6 +691,11 @@
     let inFlight        = 0;       // requests from this browser not answered yet
     let lastRev         = 0;       // newest firmware state revision applied
     let lastBootId      = null;    // revisions restart when the device reboots
+    let userPresets     = [];      // [{name, mhz, refBaseMhz}] for the selected family, A-Z
+    let presetMax       = 128;
+    let presetMenuOpen  = false;
+    let presetFocus     = -1;      // keyboard-highlighted row in the filtered list
+    let presetEditing   = null;    // original name while editing, null for a new preset
     const SPEED_SEND_INTERVAL_MS = 120;
 
     // targetMhz is the single source of truth for "what speed is commanded"
@@ -632,6 +732,7 @@
         : `<span class="approx">≈ approx.</span> <span id="readout-sub-pct">${shownPct.toFixed(1)}%</span> of base clock`;
 
       renderPresets();
+      renderPresetLabel();
 
       // Live speed in the browser tab, handy when the dashboard is in the background.
       document.title = paused ? 'Paused · HAWK 370' : `${formatMhz(shownMhz)} MHz · HAWK 370`;
@@ -682,6 +783,7 @@
         const fam = cpuFamilies.find(f => f.id === data.family);
         $('cpu-select-label').textContent = fam ? fam.name : data.familyName || '—';
         renderCpuMenu();
+        loadPresets();
       }
       if (data.verified !== undefined) renderCalibWarning(data.verified);
       updateReadoutDisplay();
@@ -763,6 +865,225 @@
 
     $('readout-value-wrap').addEventListener('click', startMhzEdit);
 
+    /* ── USER PRESETS ──────────────────────────────────────────────────────
+       Stored on the device per CPU family as an effective MHz, so a preset
+       measured on a Tualatin 1400 gives the same speed on a Tualatin 1133
+       (the firmware just recomputes the duty). Sorted A-Z, searchable. */
+    function loadPresets() {
+      if (selectedFamily === null) return Promise.resolve();
+      const family = selectedFamily;
+      return fetch(`/api/presets?family=${family}`, { cache: 'no-store' })
+        .then(r => r.ok ? r.json() : Promise.reject(r.status))
+        .then(data => {
+          if (family !== selectedFamily) return;      // family changed meanwhile
+          userPresets = (data.presets || []).slice().sort((a, b) =>
+            a.name.localeCompare(b.name, undefined, { sensitivity: 'base', numeric: true }));
+          presetMax = data.max || presetMax;
+          renderPresetList();
+          renderPresetLabel();
+        })
+        .catch(() => {});
+    }
+
+    function presetEffectiveMhz(p) { return Math.min(p.mhz, baseMhzCache); }
+
+    function filteredPresets() {
+      const q = $('preset-search').value.trim().toLowerCase();
+      return q ? userPresets.filter(p => p.name.toLowerCase().includes(q)) : userPresets;
+    }
+
+    function renderPresetLabel() {
+      const label = $('preset-label');
+      if (!label) return;
+      const match = userPresets.find(p => presetEffectiveMhz(p) === targetMhz && targetMhz > 0);
+      const famName = (cpuFamilies.find(f => f.id === selectedFamily) || {}).name || '';
+      if (match) {
+        label.innerHTML = `${escH(match.name)} <span class="muted">· ${match.mhz} MHz</span>`;
+      } else {
+        label.innerHTML = userPresets.length
+          ? `<span class="muted">My presets · ${escH(famName)} (${userPresets.length})</span>`
+          : `<span class="muted">My presets · ${escH(famName)} — none yet</span>`;
+      }
+    }
+
+    function renderPresetList() {
+      const list = $('preset-list');
+      const items = filteredPresets();
+      if (presetFocus >= items.length) presetFocus = items.length - 1;
+      if (!userPresets.length) {
+        list.innerHTML = `<div class="preset-empty">No presets for this CPU family yet. Set a speed, then use “+ Save current”.</div>`;
+        return;
+      }
+      if (!items.length) {
+        list.innerHTML = `<div class="preset-empty">No preset matches “${escH($('preset-search').value.trim())}”.</div>`;
+        return;
+      }
+      list.innerHTML = items.map((p, i) => {
+        const over = p.mhz > baseMhzCache;
+        const tip = over ? `Above this CPU's ${baseMhzCache} MHz base clock — runs at full speed`
+                         : (p.refBaseMhz ? `Measured on a ${p.refBaseMhz} MHz CPU` : '');
+        return `<div class="select-option preset-option${over ? ' over' : ''}${i === presetFocus ? ' focused' : ''}"
+                     role="option" data-i="${i}" title="${escH(tip)}">
+                  <span class="preset-name">${escH(p.name)}</span>
+                  <span class="preset-mhz">${p.mhz} MHz</span>
+                  <button type="button" class="preset-edit" data-edit="${i}" title="Edit or delete">✎</button>
+                </div>`;
+      }).join('');
+    }
+
+    function applyPreset(p) {
+      closePresetMenu();
+      if (p.mhz > baseMhzCache) {
+        showToast(`${p.name} needs ${p.mhz} MHz — running at full speed (${baseMhzCache} MHz)`, 'fail');
+      }
+      setTargetMhz(presetEffectiveMhz(p), true, true);
+      renderPresetLabel();
+    }
+
+    function openPresetMenu() {
+      if (cpuMenuOpen) closeCpuMenu();
+      $('preset-menu').classList.remove('hidden');
+      $('preset-select').classList.add('open');
+      $('preset-trigger').setAttribute('aria-expanded', 'true');
+      presetMenuOpen = true;
+      $('preset-search').value = '';
+      presetFocus = -1;
+      renderPresetList();
+      $('preset-search').focus();
+    }
+
+    function closePresetMenu() {
+      $('preset-menu').classList.add('hidden');
+      $('preset-select').classList.remove('open');
+      $('preset-trigger').setAttribute('aria-expanded', 'false');
+      presetMenuOpen = false;
+    }
+
+    $('preset-trigger').addEventListener('click', () => presetMenuOpen ? closePresetMenu() : openPresetMenu());
+    document.addEventListener('click', e => {
+      if (presetMenuOpen && !$('preset-select').contains(e.target)) closePresetMenu();
+    });
+    $('preset-search').addEventListener('input', () => { presetFocus = -1; renderPresetList(); });
+    $('preset-search').addEventListener('keydown', e => {
+      const items = filteredPresets();
+      if (e.key === 'ArrowDown') { e.preventDefault(); presetFocus = Math.min(items.length - 1, presetFocus + 1); renderPresetList(); }
+      else if (e.key === 'ArrowUp') { e.preventDefault(); presetFocus = Math.max(0, presetFocus - 1); renderPresetList(); }
+      else if (e.key === 'Enter') {
+        e.preventDefault();
+        const p = items[presetFocus >= 0 ? presetFocus : 0];
+        if (p) applyPreset(p);
+      } else if (e.key === 'Escape') { e.preventDefault(); closePresetMenu(); $('preset-trigger').focus(); }
+    });
+    $('preset-list').addEventListener('click', e => {
+      const items = filteredPresets();
+      const edit = e.target.closest('[data-edit]');
+      if (edit) { e.stopPropagation(); openPresetModal(items[Number(edit.dataset.edit)]); return; }
+      const row = e.target.closest('[data-i]');
+      if (row) applyPreset(items[Number(row.dataset.i)]);
+    });
+
+    /* Editor modal: new preset (from the current speed) or edit/delete. */
+    function openPresetModal(preset) {
+      closePresetMenu();
+      presetEditing = preset ? preset.name : null;
+      $('preset-modal-title').textContent = preset ? 'Edit Preset' : 'New Preset';
+      $('preset-name').value = preset ? preset.name : '';
+      $('preset-mhz').value  = preset ? preset.mhz : targetMhz;
+      $('preset-ref').value  = preset ? (preset.refBaseMhz || '') : baseMhzCache;
+      const famName = (cpuFamilies.find(f => f.id === selectedFamily) || {}).name || 'this family';
+      $('preset-family-hint').textContent =
+        `Saved for ${famName}. The MHz is kept as-is on other ${famName} CPUs; the base clock is just a note.`;
+      $('preset-error').textContent = '';
+      const del = $('preset-delete');
+      del.classList.toggle('hidden', !preset);
+      del.textContent = 'Delete';
+      del.dataset.armed = '';
+      $('preset-modal-overlay').classList.add('visible');
+      setTimeout(() => $('preset-name').focus(), 50);
+    }
+    function closePresetModal() { $('preset-modal-overlay').classList.remove('visible'); }
+
+    ['preset-mhz', 'preset-ref'].forEach(id =>
+      $(id).addEventListener('input', () => { $(id).value = $(id).value.replace(/[^0-9]/g, ''); }));
+    ['preset-name', 'preset-mhz', 'preset-ref'].forEach(id =>
+      $(id).addEventListener('keydown', e => {
+        if (e.key === 'Enter') { e.preventDefault(); savePreset(); }
+        if (e.key === 'Escape') { e.preventDefault(); closePresetModal(); }
+      }));
+    $('preset-save').addEventListener('click', savePreset);
+
+    async function savePreset() {
+      const name = $('preset-name').value.trim();
+      const mhz  = parseInt($('preset-mhz').value, 10);
+      const ref  = parseInt($('preset-ref').value, 10) || 0;
+      if (!name) { $('preset-error').textContent = 'Please enter a name.'; return; }
+      if (!(mhz >= 1 && mhz <= 9999)) { $('preset-error').textContent = 'MHz must be between 1 and 9999.'; return; }
+      if (!presetEditing && userPresets.length >= presetMax) {
+        $('preset-error').textContent = `This family already has ${presetMax} presets.`;
+        return;
+      }
+      const body = { family: selectedFamily, name, mhz, refBaseMhz: ref };
+      if (presetEditing) body.originalName = presetEditing;
+      try {
+        const r = await fetch('/api/presets/save', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
+        });
+        const res = await r.json().catch(() => ({}));
+        if (!r.ok) { $('preset-error').textContent = res.message || `Save failed (${r.status})`; return; }
+        closePresetModal();
+        showToast(`Preset “${name}” saved`);
+        loadPresets();
+      } catch (_) {
+        $('preset-error').textContent = 'Device not reachable.';
+      }
+    }
+
+    // Two clicks to delete: the first arms the button.
+    $('preset-delete').addEventListener('click', async () => {
+      const del = $('preset-delete');
+      if (!del.dataset.armed) { del.dataset.armed = '1'; del.textContent = 'Click again to delete'; return; }
+      try {
+        const r = await fetch('/api/presets/delete', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ family: selectedFamily, name: presetEditing })
+        });
+        const res = await r.json().catch(() => ({}));
+        if (!r.ok) { $('preset-error').textContent = res.message || `Delete failed (${r.status})`; return; }
+        closePresetModal();
+        showToast(`Preset “${presetEditing}” deleted`);
+        loadPresets();
+      } catch (_) {
+        $('preset-error').textContent = 'Device not reachable.';
+      }
+    });
+
+    $('preset-add').addEventListener('click', () => openPresetModal(null));
+
+    $('preset-export').addEventListener('click', async () => {
+      closePresetMenu();
+      try {
+        const data = await exportAllPresets();
+        downloadJson(data, `hawk370-presets-${new Date().toISOString().slice(0, 10)}.json`);
+        showToast(`Exported ${data.presets.length} preset${data.presets.length === 1 ? '' : 's'}`);
+      } catch (_) {
+        showToast('Export failed', 'fail');
+      }
+    });
+
+    $('preset-import').addEventListener('click', () => { closePresetMenu(); $('preset-file').click(); });
+    $('preset-file').addEventListener('change', async () => {
+      const file = $('preset-file').files[0];
+      $('preset-file').value = '';
+      if (!file) return;
+      try {
+        const res = await importPresetsObject(JSON.parse(await file.text()));
+        showToast(`Imported: ${res.added} new, ${res.updated} updated` + (res.skipped ? `, ${res.skipped} skipped` : ''));
+        loadPresets();
+      } catch (err) {
+        showToast(`Import failed: ${err.message || 'invalid file'}`, 'fail');
+      }
+    });
+
     /* ── KEYBOARD SHORTCUTS ──
        ← / →  ±1 MHz, with Shift ±10 MHz;  1-4  the percent presets.
        Ignored while typing in a field, with a modal open, or with Ctrl/Alt/Cmd. */
@@ -772,7 +1093,7 @@
       if (el && (el.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(el.tagName)) &&
           el.id !== 'speed-slider') return;
       if (document.querySelector('.modal-overlay.visible')) return;
-      if (cpuMenuOpen) return;
+      if (cpuMenuOpen || presetMenuOpen) return;
 
       if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
         e.preventDefault();   // also stops the focused slider's own ±1 step
@@ -837,9 +1158,11 @@
       $('cpu-select-label').textContent = fam ? fam.name : '—';
       renderCpuMenu();
       sendConfig();
+      loadPresets();
     }
 
     function openCpuMenu() {
+      if (presetMenuOpen) closePresetMenu();
       $('cpu-select-menu').classList.remove('hidden');
       $('cpu-select').classList.add('open');
       $('cpu-select-trigger').setAttribute('aria-expanded', 'true');
@@ -1042,6 +1365,11 @@
         applyThrottleState(JSON.parse(e.data), true);
       });
       es.addEventListener('ping', () => { lastSSEActivity = Date.now(); });
+      // Presets changed (maybe from another browser): reload if it is our family.
+      es.addEventListener('presets', e => {
+        const d = JSON.parse(e.data);
+        if (d.family === selectedFamily) loadPresets();
+      });
     }
     attachSSEHandlers(throttleEvents);
 
@@ -1231,7 +1559,7 @@
     }
 
     /* ── INIT ────────────────────────────────────────────────────────────── */
-    loadCpuFamilies().then(loadThrottleStatus);
+    loadCpuFamilies().then(loadThrottleStatus).then(loadPresets);
     getSystemData();
   </script>
 
