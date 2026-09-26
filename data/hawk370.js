@@ -1,4 +1,4 @@
-/* AirMeter shared utilities */
+/* HAWK 370 shared utilities */
 const $ = id => document.getElementById(id);
 
 function escH(s) {

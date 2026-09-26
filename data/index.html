@@ -156,14 +156,14 @@
       gap: 0.8em;
       margin-top: 1.2em;
       padding: 0.9em 1.1em;
-      background: var(--red-dim);
-      border: 1px solid rgba(255, 92, 92, 0.25);
-      color: var(--red);
-      font-size: 0.95em;
+      background: var(--accent-dim);                /* informational, not an error */
+      border: 1px solid rgba(255, 176, 0, 0.22);
+      color: var(--text-2);
+      font-size: 0.9em;
       line-height: 1.5;
     }
     .calib-warning.visible { display: flex; }
-    .calib-warning svg { width: 1.3em; height: 1.3em; flex-shrink: 0; margin-top: 0.1em; }
+    .calib-warning svg { width: 1.3em; height: 1.3em; flex-shrink: 0; margin-top: 0.1em; color: var(--accent); }
 
     /* ── THROTTLE READOUT + SLIDER ── */
     .readout-panel { text-align: center; padding-top: 1.8em; padding-bottom: 0.6em; }
@@ -352,19 +352,19 @@
           <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
           <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
         </svg>
-        <span>This family hasn't been bench-calibrated yet — carrier frequency and minimum pulse width are placeholder values. Verify on a scope before relying on this setting.</span>
+        <span id="calib-warning-text">Timing follows Intel's own PIIX4 STPCLK# throttle (32 µs shortest phase, 244 µs period) but has not been bench-verified on this CPU family yet.</span>
       </div>
     </div>
 
     <!-- ── THROTTLE READOUT + SLIDER ── -->
     <div class="panel readout-panel">
       <div class="readout"><span class="readout-value-wrap" id="readout-value-wrap" title="Click to enter a target MHz"><span id="readout-value">0</span></span><span class="unit">MHz</span></div>
-      <div class="readout-sub"><span class="approx">≈ approx.</span> <span id="readout-sub-pct">0%</span> of base clock</div>
+      <div class="readout-sub" id="readout-sub"><span class="approx">≈ approx.</span> <span id="readout-sub-pct">0%</span> of base clock</div>
 
       <div class="slider-block">
         <input type="range" id="speed-slider" min="0" max="9999" step="1" value="100">
         <div class="slider-endpoints">
-          <span>0 MHz — stopped</span>
+          <span>0 MHz — paused</span>
           <span id="slider-max-label">100 MHz — full speed</span>
         </div>
       </div>
@@ -384,7 +384,7 @@
               <polyline class="spark-line" id="vcore-spark-line" points="" />
               <line class="spark-current-line" id="vcore-spark-current" x1="0" y1="37" x2="200" y2="37"/>
             </svg>
-            <span class="spark-zero-label">0V</span>
+            <span class="spark-zero-label" id="vcore-spark-floor">0V</span>
             <span class="spark-current-label" id="vcore-spark-current-label"></span>
           </div>
         </div>
@@ -399,7 +399,7 @@
               <polyline class="spark-line" id="vtt-spark-line" points="" />
               <line class="spark-current-line" id="vtt-spark-current" x1="0" y1="37" x2="200" y2="37"/>
             </svg>
-            <span class="spark-zero-label">0V</span>
+            <span class="spark-zero-label" id="vtt-spark-floor">0V</span>
             <span class="spark-current-label" id="vtt-spark-current-label"></span>
           </div>
         </div>
@@ -573,6 +573,11 @@
     let cpuMenuOpen     = false;
     let baseMhzCache    = 300;
     let speedSendTimer  = null;
+    let lastSpeedSend   = 0;
+    let speedSeq        = 0;       // only the newest response may repaint
+    let localChangeAt   = 0;       // ignore SSE echoes while the user is dragging
+    let delivered       = null;    // { mhz, pct, paused } as reported by the firmware
+    const SPEED_SEND_INTERVAL_MS = 120;
 
     // targetMhz is the single source of truth for "what speed is commanded"
     // in this UI. The wire format is still speedPercent (0-100, now a
@@ -589,12 +594,23 @@
     // Repaints the big number + the "≈ approx. NN% of base clock" line and
     // the slider position from the current targetMhz/baseMhzCache. Does
     // NOT talk to the device — call sendSpeedMhz() separately for that.
-    function updateReadoutDisplay() {
-      const valEl = $('readout-value');
-      if (valEl) valEl.textContent = targetMhz; // null while the click-to-edit input is open
+    // The big number shows what the CPU really gets (delivered), falling back
+    // to the requested value until the firmware has answered.
+    function formatMhz(mhz) {
+      return mhz > 0 && mhz < 10 ? mhz.toFixed(1) : String(Math.round(mhz));
+    }
 
-      const pct = baseMhzCache > 0 ? (targetMhz / baseMhzCache * 100) : 0;
-      $('readout-sub-pct').textContent = pct.toFixed(1) + '%';
+    function updateReadoutDisplay() {
+      const shownMhz = delivered ? delivered.mhz : targetMhz;
+      const shownPct = delivered ? delivered.pct
+                                 : (baseMhzCache > 0 ? (targetMhz / baseMhzCache * 100) : 0);
+      const valEl = $('readout-value');
+      if (valEl) valEl.textContent = formatMhz(shownMhz); // null while the click-to-edit input is open
+
+      const paused = delivered ? delivered.paused : targetMhz === 0;
+      $('readout-sub').innerHTML = paused
+        ? '<span class="approx">Paused</span> — STPCLK# held, CPU halted until you move the slider'
+        : `<span class="approx">≈ approx.</span> <span id="readout-sub-pct">${shownPct.toFixed(1)}%</span> of base clock`;
 
       const slider = $('speed-slider');
       slider.max   = baseMhzCache;
@@ -609,22 +625,51 @@
       if (newMhzValue === targetMhz) return;
 
       targetMhz = newMhzValue;
+      delivered = null;            // until the firmware reports the real value
+      localChangeAt = Date.now();
       updateReadoutDisplay();
       if (send) sendSpeedMhz(immediate);
     }
 
+    // Applies a throttle state from the firmware (POST response or SSE).
+    function applyThrottleState(data, moveSlider) {
+      if (!data || data.deliveredMhz === undefined) return;
+      if (data.baseMhz && data.baseMhz !== baseMhzCache && document.activeElement !== $('base-mhz')) {
+        baseMhzCache = data.baseMhz;
+        $('base-mhz').value = data.baseMhz;
+      }
+      if (moveSlider) targetMhz = clampMhz(data.baseMhz * (data.requestedPercent / 100));
+      delivered = { mhz: data.deliveredMhz, pct: data.deliveredPercent, paused: !!data.paused };
+      if (data.family !== undefined && data.family !== selectedFamily) {
+        selectedFamily = data.family;
+        const fam = cpuFamilies.find(f => f.id === data.family);
+        $('cpu-select-label').textContent = fam ? fam.name : data.familyName || '—';
+        renderCpuMenu();
+      }
+      if (data.verified !== undefined) renderCalibWarning(data.verified);
+      updateReadoutDisplay();
+    }
+
+    // Sends at most every SPEED_SEND_INTERVAL_MS while dragging, and always
+    // the final value, so the CPU follows the slider live.
     function sendSpeedMhz(immediate) {
-      const speedPercent = baseMhzCache > 0 ? (targetMhz / baseMhzCache * 100) : 0;
       clearTimeout(speedSendTimer);
       const doSend = () => {
+        lastSpeedSend = Date.now();
+        const speedPercent = baseMhzCache > 0 ? (targetMhz / baseMhzCache * 100) : 0;
+        const seq = ++speedSeq;
         fetch('/api/throttle/speed', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ speedPercent })
-        }).catch(() => showToast('Failed to set speed', 'fail'));
+        })
+          .then(r => { if (!r.ok) throw new Error(r.status); return r.json(); })
+          .then(data => { if (seq === speedSeq) applyThrottleState(data, false); })
+          .catch(() => showToast('Failed to set speed', 'fail'));
       };
-      if (immediate) doSend();
-      else speedSendTimer = setTimeout(doSend, 150);
+      const wait = immediate ? 0 : Math.max(0, SPEED_SEND_INTERVAL_MS - (Date.now() - lastSpeedSend));
+      if (wait === 0) doSend();
+      else speedSendTimer = setTimeout(doSend, wait);
     }
 
     /* ── CLICK-TO-EDIT MHZ READOUT (same pattern as file rename in files.html) ── */
@@ -652,7 +697,8 @@
     }
 
     function renderReadoutValue() {
-      $('readout-value-wrap').innerHTML = `<span id="readout-value">${targetMhz}</span>`;
+      $('readout-value-wrap').innerHTML = `<span id="readout-value"></span>`;
+      updateReadoutDisplay();
     }
 
     $('readout-value-wrap').addEventListener('click', startMhzEdit);
@@ -665,8 +711,8 @@
       setTargetMhz(parseInt($('speed-slider').value, 10), true, false);
     });
 
-    function renderCalibWarning(calibrated) {
-      $('calib-warning').classList.toggle('visible', !calibrated);
+    function renderCalibWarning(verified) {
+      $('calib-warning').classList.toggle('visible', !verified);
     }
 
     /* ── CUSTOM CPU-FAMILY DROPDOWN ─────────────────────────────────────
@@ -741,10 +787,7 @@
           $('base-mhz').value = data.baseMhz;
           baseMhzCache = data.baseMhz;
 
-          targetMhz = clampMhz(data.baseMhz * (data.speedPercent / 100));
-          updateReadoutDisplay();
-
-          renderCalibWarning(data.calibrated);
+          applyThrottleState(data, true);
         })
         .catch(() => {});
     }
@@ -764,10 +807,12 @@
 
       baseMhzCache = newBaseMhz;
       targetMhz    = clampMhz(targetMhz); // no-op unless the new base clock is now below the old target
+      delivered    = null;                // re-reported once the speed is re-sent below
       updateReadoutDisplay();
 
       const fam = cpuFamilies.find(f => f.id === family);
-      if (fam) renderCalibWarning(fam.calibrated);
+      if (fam) renderCalibWarning(fam.verified);
+      localChangeAt = Date.now();
 
       fetch('/api/throttle/config', {
         method: 'POST',
@@ -803,11 +848,21 @@
     const vcoreHistory = [];
     const vttHistory   = [];
 
+    // Scales to the window's own min..max (at least SPARK_MIN_SPAN volts), so
+    // a 1.5 V rail wobbling by 20 mV is visible instead of a flat line.
+    const SPARK_MIN_SPAN = 0.1;
     function renderSpark(name, hist) {
       if (hist.length < 2) return;
-      const min = 0;
-      const max = Math.max(...hist) || 0.01;
-      const range = (max - min) || 0.01;
+      let min = Math.min(...hist);
+      let max = Math.max(...hist);
+      if (max - min < SPARK_MIN_SPAN) {
+        const mid = (max + min) / 2;
+        min = mid - SPARK_MIN_SPAN / 2;
+        max = mid + SPARK_MIN_SPAN / 2;
+      }
+      min = Math.max(0, min);
+      const range = (max - min) || SPARK_MIN_SPAN;
+      $(name + '-spark-floor').textContent = min.toFixed(2) + 'V';
       const w = 200, h = 40, pad = 3;
       const step = w / (VOLT_HISTORY_LEN - 1);
       const startX = w - (hist.length - 1) * step;
@@ -835,6 +890,10 @@
     }
 
     function pushVoltage(name, value) {
+      if (typeof value !== 'number') {        // ADC unavailable on this unit
+        $(name + '-value').textContent = '--';
+        return;
+      }
       const hist = name === 'vcore' ? vcoreHistory : vttHistory;
       hist.push(value);
       if (hist.length > VOLT_HISTORY_LEN) hist.shift();
@@ -875,6 +934,14 @@
 
     function attachSSEHandlers(es) {
       es.addEventListener('telemetry', e => pushTelemetry(JSON.parse(e.data)));
+      // Throttle changes made from another browser (or this one) are pushed here.
+      es.addEventListener('throttle', e => {
+        lastSSEActivity = Date.now();
+        if (Date.now() - localChangeAt < 800) return;   // the user is moving it right now
+        if (document.getElementById('mhz-edit-input')) return;
+        applyThrottleState(JSON.parse(e.data), true);
+      });
+      es.addEventListener('ping', () => { lastSSEActivity = Date.now(); });
     }
     attachSSEHandlers(throttleEvents);
 

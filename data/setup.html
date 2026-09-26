@@ -427,7 +427,7 @@
       </div>
 
       <div class="input-wrap">
-        <input type="password" id="wifi-pass" placeholder="Enter Wi-Fi password" autocomplete="current-password">
+        <input type="password" id="wifi-pass" placeholder="Wi-Fi password (empty for open networks)" autocomplete="current-password">
         <span class="input-label">Password</span>
         <button class="eye-btn" id="eye-btn" onclick="togglePassword()" type="button" tabindex="-1">
           <svg id="eye-icon" viewBox="0 0 16 16" fill="none">
@@ -568,7 +568,8 @@
               const barsHTML = [1,2,3,4].map(n => `<span class="${n <= bars ? 'lit' : ''}"></span>`).join('');
               const div = document.createElement('div');
               div.className = 'net-item';
-              div.innerHTML  = `<span class="net-ssid">${item.ssid}</span><div class="signal-bars">${barsHTML}</div>`;
+              // SSIDs come from the air: escape them before they touch innerHTML.
+              div.innerHTML  = `<span class="net-ssid">${escH(item.ssid)}</span><div class="signal-bars">${barsHTML}</div>`;
               div.onclick = () => {
                 document.querySelectorAll('.net-item').forEach(el => el.classList.remove('selected'));
                 div.classList.add('selected');
@@ -586,10 +587,12 @@
       })();
     }
 
+    // XOR over the password's UTF-8 bytes, each byte as 2 hex chars, so
+    // umlauts and other non-ASCII characters reach the router intact.
     function obfuscate(str, key) {
-      return [...str].map((c, i) =>
-        (c.charCodeAt(0) ^ key.charCodeAt(i % key.length))
-          .toString(16).padStart(2, '0')  // each byte as 2 hex chars
+      const bytes = new TextEncoder().encode(str);
+      return Array.from(bytes, (b, i) =>
+        (b ^ key.charCodeAt(i % key.length)).toString(16).padStart(2, '0')
       ).join('');
     }
 
@@ -661,9 +664,10 @@
 
       function pollHomeNetwork() {
         elapsed++;
-        fetch('http://hawk370.local', { method: 'GET', mode: 'cors', credentials: 'omit' })
-          .then(res => {
-            if (!res.ok) throw 0;
+        // Cross-origin from 192.168.8.1: an opaque 'no-cors' response is all we
+        // need — if the request resolves at all, the device is reachable.
+        fetch('http://hawk370.local/', { method: 'GET', mode: 'no-cors', cache: 'no-store', credentials: 'omit' })
+          .then(() => {
             $('migration-warning').classList.remove('visible');
             btn.disabled = false;
             btn.className = 'btn btn-block btn-success';

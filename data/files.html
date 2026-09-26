@@ -353,7 +353,7 @@
           </svg>
         </div>
         <div class="drop-label">Drop files here or click to browse</div>
-        <div class="drop-hint">.bin → firmware OTA &nbsp;·&nbsp; any other file → Storage</div>
+        <div class="drop-hint">.bin → firmware OTA &nbsp;·&nbsp; *littlefs*.bin → storage image &nbsp;·&nbsp; any other file → Storage</div>
       </div>
 
       <!-- File queue -->
@@ -516,8 +516,13 @@
     const rebootSec      = $('rebootSec');
 
     /* ── HELPERS ────────────────────────────────────────────────────────── */
+    // Any .bin is flashed; a name containing "littlefs" (as produced by
+    // Build_Release.bat) is a storage image, everything else is firmware.
     function isFirmwareFile(file) {
       return file.name.toLowerCase().endsWith('.bin');
+    }
+    function isStorageImage(file) {
+      return isFirmwareFile(file) && file.name.toLowerCase().includes('littlefs');
     }
 
     /* ── QUEUE MANAGEMENT ───────────────────────────────────────────────── */
@@ -525,7 +530,13 @@
       for (const file of files) {
         // Deduplicate by name
         if (queue.some(e => e.file.name === file.name)) continue;
-        queue.push({ id: nextId++, file, isFirmware: isFirmwareFile(file), status: 'pending' });
+        // The device reboots after flashing, so only one image per run.
+        if (isFirmwareFile(file) && queue.some(e => e.isFirmware && e.status === 'pending')) {
+          showToast('Only one .bin image per upload run', 'fail');
+          continue;
+        }
+        queue.push({ id: nextId++, file, isFirmware: isFirmwareFile(file),
+                     isImage: isStorageImage(file), status: 'pending', error: '' });
       }
       renderQueue();
       updateUI();
@@ -567,7 +578,7 @@
             <span class="q-name" title="${entry.file.name}">${entry.file.name}</span>
             <div class="q-meta">
               <span class="q-size">${fmtBytes(entry.file.size)}</span>
-              <span class="q-tag ${entry.isFirmware ? 'firmware' : 'file'}">${entry.isFirmware ? 'Firmware' : 'File'}</span>
+              <span class="q-tag ${entry.isFirmware ? 'firmware' : 'file'}">${entry.isImage ? 'Storage image' : entry.isFirmware ? 'Firmware' : 'File'}</span>
               <span class="q-status">${statusLabels[entry.status]}</span>
             </div>
             <div class="q-progress-track">
@@ -689,10 +700,16 @@
 
       if (hadError) {
         overallLabel.textContent = 'Stopped due to error.';
-        showStatus('error', 'Upload stopped. Check the failed file and try again.');
+        const failed = queue.find(e => e.status === 'failed' && e.error);
+        showStatus('error', failed
+          ? `Upload stopped: ${failed.error}`
+          : 'Upload stopped. Check the failed file and try again.');
       } else if (firmwareDone) {
-        overallLabel.textContent = 'Firmware flashed. Rebooting…';
-        showStatus('success', 'All files uploaded. Firmware flashed --- device is rebooting…');
+        const image = queue.some(e => e.isImage && e.status === 'done');
+        overallLabel.textContent = (image ? 'Storage image' : 'Firmware') + ' flashed. Rebooting…';
+        showStatus('success', image
+          ? 'Storage image flashed — device is rebooting with the new web files…'
+          : 'All files uploaded. Firmware flashed — device is rebooting…');
         startRebootCountdown(10);
       } else {
         overallLabel.textContent = `Done - ${done} file${done !== 1 ? 's' : ''} uploaded.`;
@@ -710,7 +727,8 @@
     /* Upload a single entry — returns true on success */
     function uploadOne(entry) {
       return new Promise((resolve) => {
-        const endpoint = entry.isFirmware ? FIRMWARE_ENDPOINT : FILE_ENDPOINT;
+        const endpoint = entry.isImage ? FIRMWARE_ENDPOINT + '?target=fs'
+                       : entry.isFirmware ? FIRMWARE_ENDPOINT : FILE_ENDPOINT;
         const formData = new FormData();
 
         if (entry.isFirmware) {
@@ -733,6 +751,10 @@
         xhr.addEventListener('load', () => {
           const bar = barEl();
           if (bar) bar.style.width = '100%';
+          if (xhr.status !== 200) {
+            // The firmware explains failures as {status, message}.
+            try { entry.error = JSON.parse(xhr.responseText).message || ''; } catch (_) { entry.error = ''; }
+          }
           resolve(xhr.status === 200);
         });
 

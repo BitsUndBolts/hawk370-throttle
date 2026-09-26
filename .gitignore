@@ -1,3 +1,4 @@
 build/
 release/
 Build_Release.bat
+test/build/
