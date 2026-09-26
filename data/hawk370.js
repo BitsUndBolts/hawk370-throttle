@@ -19,6 +19,23 @@ function getSignalBars(rssi) {
   return 1;
 }
 
+// Asks a HAWK 370 whether it is alive. `base` is '' for this page's own host,
+// or e.g. 'http://192.168.8.1'. Resolves to the /api/ping JSON, or null.
+async function probeDevice(base = '', timeoutMs = 2500) {
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(), timeoutMs);
+  try {
+    const r = await fetch(base + '/api/ping', { cache: 'no-store', signal: ctl.signal });
+    if (!r.ok) return null;
+    const info = await r.json();
+    return info && info.device === 'hawk370' ? info : null;
+  } catch (_) {
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 let _toastTimer = null;
 function showToast(msg, type = 'success') {
   const t = $('toast');

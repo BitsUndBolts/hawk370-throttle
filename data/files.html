@@ -406,7 +406,7 @@
 
       <!-- Reboot countdown -->
       <div class="reboot-row" id="rebootRow">
-        Reconnect in <span id="rebootSec">10</span>s…
+        <span id="rebootSec">Waiting for the device to restart…</span>
       </div>
 
     </div><!-- /upload-section -->
@@ -649,6 +649,11 @@
       if (isUploading) return;
       isUploading = true;
 
+      // Remember which boot we are talking to, so a flash-triggered restart
+      // can be recognised afterwards.
+      const pre = await probeDevice();
+      if (pre) bootIdBeforeFlash = pre.bootId;
+
       // Reset global status
       statusMsg.className = 'notice';
       rebootRow.classList.remove('visible');
@@ -710,7 +715,7 @@
         showStatus('success', image
           ? 'Storage image flashed — device is rebooting with the new web files…'
           : 'All files uploaded. Firmware flashed — device is rebooting…');
-        startRebootCountdown(10);
+        waitForReboot(image);
       } else {
         overallLabel.textContent = `Done - ${done} file${done !== 1 ? 's' : ''} uploaded.`;
         showStatus('success', `${done} file${done !== 1 ? 's' : ''} successfully written to Storage.`);
@@ -777,17 +782,33 @@
       statusText.textContent = text;
     }
 
-    function startRebootCountdown(secs) {
+    // Polls the device until it answers with a new boot id. A storage image
+    // replaced this very page, so that case reloads; firmware just refreshes.
+    let bootIdBeforeFlash = null;
+
+    function waitForReboot(reloadPage) {
       rebootRow.classList.add('visible');
-      rebootSec.textContent = secs;
-      const iv = setInterval(() => {
-        secs--;
-        rebootSec.textContent = secs;
-        if (secs <= 0) {
-          clearInterval(iv);
-          rebootRow.classList.remove('visible');
+      rebootSec.textContent = 'Waiting for the device to restart…';
+      const started = Date.now();
+      const poll = async () => {
+        const info = await probeDevice();
+        if (info && info.bootId !== bootIdBeforeFlash) {
+          if (reloadPage) { window.location.reload(); return; }
+          bootIdBeforeFlash = info.bootId;
+          rebootSec.textContent = `Back online — firmware v${info.firmware}`;
+          queue = queue.filter(e => e.status !== 'done');
+          renderQueue();
+          fetchSystemInfo();
+          loadFiles();
+          setTimeout(() => rebootRow.classList.remove('visible'), 5000);
+          return;
         }
-      }, 1000);
+        if (Date.now() - started > 60000) {
+          rebootSec.textContent = 'Still waiting after 60 s — check power and Wi-Fi…';
+        }
+        setTimeout(poll, 1000);
+      };
+      setTimeout(poll, 1500);
     }
 
     /* ── FETCH SYSTEM INFO ──────────────────────────────────────────────── */

@@ -4,7 +4,7 @@
  */
 
 // =============================================================================
-// HAWK 370 Wireless ThrottleBlaster — ESP32-C3 SuperMini Firmware 0.2
+// HAWK 370 Wireless ThrottleBlaster — ESP32-C3 SuperMini Firmware 0.3
 //
 // Wireless Socket 370 CPU throttle controller (Mendocino / Coppermine /
 // Tualatin / VIA C3) for the HAWK 370 Slotket. Web server, Wi-Fi provisioning,
@@ -28,6 +28,7 @@
 //
 // Board: "ESP32C3 Dev Module", USB CDC On Boot: Enabled. The partition table
 // comes from partitions.csv in this folder (same layout as the core default).
+// The CPU runs at 160 MHz whatever the IDE menu says (see setup()).
 // =============================================================================
 
 #include <LittleFS.h>
@@ -43,6 +44,12 @@ void setup() {
   // Before anything else: STPCLK# released. (The 10k gate pull-down on the PCB
   // already holds the FET off through reset; this makes the level explicit.)
   throttleEarlyPinInit();
+
+  // 160 MHz regardless of the IDE's CPU-frequency menu. The STPCLK# timing does
+  // not depend on it (the RMT counts the fixed 80 MHz APB clock), but the web
+  // server and the edge-synchronised pattern switch get twice the headroom for
+  // a few mA more than 80 MHz.
+  setCpuFrequencyMhz(160);
 
   Serial.begin(115200);
   Serial.printf("\n--- HAWK 370 ThrottleBlaster %s booting ---\n", HAWK_FIRMWARE_VERSION);

@@ -197,10 +197,14 @@
       border-bottom: 1px dashed var(--accent);
       outline: none;
       width: 5ch;
-      text-align: right;
+      text-align: center;
+      caret-color: var(--accent);
       -moz-appearance: textfield;
       appearance: textfield;
     }
+    .preset-row { margin-top: 1.1em; }
+    .reset-probe { margin-top: 1em; font-size: 0.85em; color: var(--text-3); }
+    .preset-row .freq-btn { min-width: 4.4em; }
     .readout-input::-webkit-outer-spin-button,
     .readout-input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
     #speed-slider {
@@ -360,6 +364,14 @@
     <div class="panel readout-panel">
       <div class="readout"><span class="readout-value-wrap" id="readout-value-wrap" title="Click to enter a target MHz"><span id="readout-value">0</span></span><span class="unit">MHz</span></div>
       <div class="readout-sub" id="readout-sub"><span class="approx">≈ approx.</span> <span id="readout-sub-pct">0%</span> of base clock</div>
+      <div class="preset-row">
+        <span class="freq-toggle" id="speed-presets" role="group" aria-label="Quick speed presets">
+          <button type="button" class="freq-btn" data-pct="25">25%</button>
+          <button type="button" class="freq-btn" data-pct="50">50%</button>
+          <button type="button" class="freq-btn" data-pct="75">75%</button>
+          <button type="button" class="freq-btn" data-pct="100">100%</button>
+        </span>
+      </div>
 
       <div class="slider-block">
         <input type="range" id="speed-slider" min="0" max="9999" step="1" value="100">
@@ -524,6 +536,7 @@
               <div class="step-text">Visit <a href="http://hawk370.local">hawk370.local</a> to run setup again.</div>
             </div>
           </div>
+          <p class="reset-probe" id="reset-probe-status">Waiting for HAWK 370 to come back… this page opens setup automatically once your device is on HAWK370-Setup.</p>
         </div>
       </div>
     </div>
@@ -558,7 +571,7 @@
           <span class="modal-title warning">Restarting...</span>
         </div>
         <div class="modal-body">
-          <p>The device is restarting. Please wait...</p>
+          <p id="restart-status">The device is restarting. This page reloads as soon as it is back.</p>
         </div>
       </div>
     </div>
@@ -577,6 +590,9 @@
     let speedSeq        = 0;       // only the newest response may repaint
     let localChangeAt   = 0;       // ignore SSE echoes while the user is dragging
     let delivered       = null;    // { mhz, pct, paused } as reported by the firmware
+    let inFlight        = 0;       // requests from this browser not answered yet
+    let lastRev         = 0;       // newest firmware state revision applied
+    let lastBootId      = null;    // revisions restart when the device reboots
     const SPEED_SEND_INTERVAL_MS = 120;
 
     // targetMhz is the single source of truth for "what speed is commanded"
@@ -612,6 +628,8 @@
         ? '<span class="approx">Paused</span> — STPCLK# held, CPU halted until you move the slider'
         : `<span class="approx">≈ approx.</span> <span id="readout-sub-pct">${shownPct.toFixed(1)}%</span> of base clock`;
 
+      renderPresets();
+
       const slider = $('speed-slider');
       slider.max   = baseMhzCache;
       slider.value = targetMhz;
@@ -634,12 +652,25 @@
     // Applies a throttle state from the firmware (POST response or SSE).
     function applyThrottleState(data, moveSlider) {
       if (!data || data.deliveredMhz === undefined) return;
+      // Drop anything older than what is already shown. A power-saving Wi-Fi
+      // link can deliver SSE events late; without this they moved the slider
+      // back to positions from the middle of a drag.
+      if (data.bootId !== undefined && data.bootId !== lastBootId) { lastBootId = data.bootId; lastRev = 0; }
+      if (data.rev !== undefined) {
+        if (data.rev < lastRev) return;
+        lastRev = data.rev;
+      }
       if (data.baseMhz && data.baseMhz !== baseMhzCache && document.activeElement !== $('base-mhz')) {
         baseMhzCache = data.baseMhz;
         $('base-mhz').value = data.baseMhz;
       }
       if (moveSlider) targetMhz = clampMhz(data.baseMhz * (data.requestedPercent / 100));
-      delivered = { mhz: data.deliveredMhz, pct: data.deliveredPercent, paused: !!data.paused };
+      // Only show "delivered" when it answers the value now on the slider; a
+      // reply for an earlier drag position would make the big number flicker.
+      const answersCurrent = clampMhz(data.baseMhz * (data.requestedPercent / 100)) === targetMhz;
+      delivered = answersCurrent
+        ? { mhz: data.deliveredMhz, pct: data.deliveredPercent, paused: !!data.paused }
+        : null;
       if (data.family !== undefined && data.family !== selectedFamily) {
         selectedFamily = data.family;
         const fam = cpuFamilies.find(f => f.id === data.family);
@@ -658,6 +689,7 @@
         lastSpeedSend = Date.now();
         const speedPercent = baseMhzCache > 0 ? (targetMhz / baseMhzCache * 100) : 0;
         const seq = ++speedSeq;
+        inFlight++;
         fetch('/api/throttle/speed', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -665,7 +697,8 @@
         })
           .then(r => { if (!r.ok) throw new Error(r.status); return r.json(); })
           .then(data => { if (seq === speedSeq) applyThrottleState(data, false); })
-          .catch(() => showToast('Failed to set speed', 'fail'));
+          .catch(() => showToast('Failed to set speed', 'fail'))
+          .finally(() => { inFlight--; });
       };
       const wait = immediate ? 0 : Math.max(0, SPEED_SEND_INTERVAL_MS - (Date.now() - lastSpeedSend));
       if (wait === 0) doSend();
@@ -673,27 +706,48 @@
     }
 
     /* ── CLICK-TO-EDIT MHZ READOUT (same pattern as file rename in files.html) ── */
-    function startMhzEdit() {
-      const wrap = $('readout-value-wrap');
-      wrap.innerHTML = `<input type="number" id="mhz-edit-input" class="readout-input"
-                                min="0" max="${baseMhzCache}" step="1" value="${targetMhz}">`;
-      const input = $('mhz-edit-input');
-      input.addEventListener('keydown', e => {
-        if (e.key === 'Enter')  { e.preventDefault(); input.blur(); }
-        if (e.key === 'Escape') { input.dataset.cancel = '1'; input.blur(); }
-      });
-      input.addEventListener('blur', () => {
-        if (input.dataset.cancel === '1') { renderReadoutValue(); return; }
-        commitMhzEdit(input.value);
-      });
-      input.focus();
-      input.select();
-    }
+    // Click the number to edit it; the caret lands where you clicked, and
+    // further clicks inside just move it. Enter or a click anywhere outside
+    // applies the value and ends editing; Escape cancels.
+    function startMhzEdit(e) {
+      if ($('mhz-edit-input')) return;   // already editing: the click only moves the caret
+      const wrap  = $('readout-value-wrap');
+      const shown = $('readout-value');
+      const value = String(targetMhz);
 
-    function commitMhzEdit(rawValue) {
-      const parsed = parseFloat(rawValue);
-      setTargetMhz(Number.isFinite(parsed) ? parsed : targetMhz, true, true);
-      renderReadoutValue();
+      let caret = value.length;
+      if (e && shown) {
+        const r = shown.getBoundingClientRect();   // monospace digits: position -> index
+        if (r.width > 0) caret = Math.round(((e.clientX - r.left) / r.width) * value.length);
+        caret = Math.min(value.length, Math.max(0, caret));
+      }
+
+      wrap.innerHTML = `<input type="text" id="mhz-edit-input" class="readout-input" inputmode="numeric"
+                               maxlength="4" autocomplete="off" spellcheck="false" value="${value}">`;
+      const input = $('mhz-edit-input');
+      const fit = () => { input.style.width = `${Math.max(input.value.length, 1) + 0.5}ch`; };
+      fit();
+
+      let finished = false;
+      const finish = apply => {
+        if (finished) return;
+        finished = true;
+        const parsed = parseInt(input.value, 10);
+        renderReadoutValue();
+        if (apply && Number.isFinite(parsed)) setTargetMhz(parsed, true, true);
+      };
+
+      input.addEventListener('input', () => {
+        input.value = input.value.replace(/[^0-9]/g, '');
+        fit();
+      });
+      input.addEventListener('keydown', ev => {
+        if (ev.key === 'Enter')  { ev.preventDefault(); finish(true); }
+        if (ev.key === 'Escape') { ev.preventDefault(); finish(false); }
+      });
+      input.addEventListener('blur', () => finish(true));
+      input.focus();
+      input.setSelectionRange(caret, caret);
     }
 
     function renderReadoutValue() {
@@ -702,6 +756,20 @@
     }
 
     $('readout-value-wrap').addEventListener('click', startMhzEdit);
+
+    /* ── QUICK SPEED PRESETS (percent of the base clock) ── */
+    function renderPresets() {
+      document.querySelectorAll('#speed-presets .freq-btn').forEach(btn => {
+        const mhz = clampMhz(baseMhzCache * Number(btn.dataset.pct) / 100);
+        btn.classList.toggle('active', mhz === targetMhz);
+        btn.title = `${mhz} MHz`;
+      });
+    }
+    document.querySelectorAll('#speed-presets .freq-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        setTargetMhz(baseMhzCache * Number(btn.dataset.pct) / 100, true, true);
+      });
+    });
 
     /* ── SPEED SLIDER (drags in whole MHz, converted to speedPercent on send) ── */
     $('speed-slider').addEventListener('input', () => {
@@ -814,13 +882,15 @@
       if (fam) renderCalibWarning(fam.verified);
       localChangeAt = Date.now();
 
+      inFlight++;
       fetch('/api/throttle/config', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ family, baseMhz: newBaseMhz })
       })
         .then(() => sendSpeedMhz(true)) // re-sync speedPercent so the absolute MHz target holds under the new base
-        .catch(() => showToast('Failed to save CPU configuration', 'fail'));
+        .catch(() => showToast('Failed to save CPU configuration', 'fail'))
+        .finally(() => { inFlight--; });
     }
 
     /* ── MHZ STEPPER BUTTONS (base clock field) ── */
@@ -937,7 +1007,7 @@
       // Throttle changes made from another browser (or this one) are pushed here.
       es.addEventListener('throttle', e => {
         lastSSEActivity = Date.now();
-        if (Date.now() - localChangeAt < 800) return;   // the user is moving it right now
+        if (inFlight > 0 || Date.now() - localChangeAt < 800) return;   // our own change is still settling
         if (document.getElementById('mhz-edit-input')) return;
         applyThrottleState(JSON.parse(e.data), true);
       });
@@ -1013,6 +1083,24 @@
       fetch('/api/factory-reset', { method: 'POST' })
         .then(res => res.json())
         .catch(() => console.log('Device connection severed. System rebooting.'));
+      setTimeout(findSetupDevice, 3000);
+    }
+
+    // After a Wi-Fi reset the device comes back as the HAWK370-Setup hotspot.
+    // Keep asking both of its addresses until one answers in setup mode (the
+    // old LAN address may still answer for a moment, but not in setup mode),
+    // then open the setup wizard there.
+    const SETUP_ADDRESSES = ['http://hawk370.local', 'http://192.168.8.1'];
+    async function findSetupDevice() {
+      for (const base of SETUP_ADDRESSES) {
+        const info = await probeDevice(base);
+        if (info && info.provisioning) {
+          $('reset-probe-status').textContent = 'HAWK 370 found — opening setup…';
+          window.location.href = base + '/';
+          return;
+        }
+      }
+      setTimeout(findSetupDevice, 1500);
     }
 
     function openRestartModal() {
@@ -1024,13 +1112,23 @@
     async function executeRestart() {
       $('restart-step-confirm').classList.add('hidden');
       $('restart-step-restarting').classList.remove('hidden');
+      const before = await probeDevice();
       try { await fetch('/api/restart', { method: 'POST' }); } catch (_) { /* expected */ }
 
-      // Give the device time to actually reboot before forcing a fresh SSE connection
-      setTimeout(() => {
-        reconnectSSE();
-        closeRestartModal();
-      }, 6000);
+      // Reload once the device answers with a new boot id, however long it takes.
+      const started = Date.now();
+      const poll = async () => {
+        const info = await probeDevice();
+        if (info && (!before || info.bootId !== before.bootId)) {
+          window.location.reload();
+          return;
+        }
+        if (Date.now() - started > 60000) {
+          $('restart-status').textContent = 'Still waiting for the device after 60 s. Check its power and Wi-Fi; this page keeps trying.';
+        }
+        setTimeout(poll, 1000);
+      };
+      setTimeout(poll, 1500);
     }
 
     let lastSSEActivity = Date.now();
@@ -1070,6 +1168,7 @@
             modelEl.textContent = esp.model;
             const tipParts = [];
             if (esp.cores !== undefined) tipParts.push(`Cores: ${esp.cores}`);
+            if (esp.cpuMhz !== undefined) tipParts.push(`CPU: ${esp.cpuMhz} MHz`);
             if (esp.rev   !== undefined) tipParts.push(`Rev: ${esp.rev}`);
             if (esp.ver)                 tipParts.push(`SDK: ${esp.ver}`);
             modelEl.title = tipParts.join(' · ');

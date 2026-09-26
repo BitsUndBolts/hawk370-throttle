@@ -14,3 +14,4 @@
 void webBegin(bool littlefsMounted);
 void webTick();                          // SSE pushes and scheduled reboots, from loop()
 void webRequestReboot(uint32_t delayMs);
+uint32_t webBootId();                    // random per boot, lets browsers spot a restart

@@ -24,8 +24,12 @@ static bool     littlefsOk    = false;
 static volatile bool     rebootPending = false;
 static volatile uint32_t rebootAt      = 0;
 
+static uint32_t bootId = 0;
+
 static const uint32_t TELEMETRY_PUSH_MS = 500;
 static const uint32_t SSE_PING_MS       = 25000;
+
+uint32_t webBootId() { return bootId; }
 
 void webRequestReboot(uint32_t delayMs) {
   rebootAt      = millis() + delayMs;
@@ -110,6 +114,8 @@ static void fillThrottle(JsonObject o, const ThrottleState& s) {
   o["deliveredPercent"] = s.deliveredPercent;
   o["deliveredMhz"]     = s.deliveredPercent * s.baseMhz / 100.0f;
   o["paused"]           = s.paused;
+  o["rev"]              = s.rev;
+  o["bootId"]           = bootId;
   o["minPercent"]       = hawk::minModulatedPercent(fam.timing);
   o["maxPercent"]       = hawk::maxModulatedPercent(fam.timing);
 }
@@ -391,6 +397,25 @@ static void setupRoutes() {
     }
   });
 
+  // ── Liveness probe ───────────────────────────────────────────────────
+  // Cross-origin on purpose: after a Wi-Fi reset the dashboard (still loaded
+  // from the old LAN address) polls 192.168.8.1 / hawk370.local to find the
+  // device again, and after a restart bootId tells it the reboot happened.
+  server.on("/api/ping", HTTP_GET, [](AsyncWebServerRequest* request) {
+    JsonDocument doc;
+    doc["device"]       = "hawk370";
+    doc["firmware"]     = HAWK_FIRMWARE_VERSION;
+    doc["bootId"]       = bootId;
+    doc["uptimeMs"]     = millis();
+    doc["provisioning"] = netProvisioning();
+    String out;
+    serializeJson(doc, out);
+    AsyncWebServerResponse* r = request->beginResponse(200, "application/json", out);
+    r->addHeader("Access-Control-Allow-Origin", "*");
+    r->addHeader("Cache-Control", "no-store");
+    request->send(r);
+  });
+
   // ── System ───────────────────────────────────────────────────────────
   server.on("/api/factory-reset", HTTP_POST, [](AsyncWebServerRequest* request) {
     if (!requireProvisioning(request, false)) return;
@@ -409,6 +434,7 @@ static void setupRoutes() {
   server.on("/api/system", HTTP_GET, [](AsyncWebServerRequest* request) {
     JsonDocument doc;
     doc["firmware"]  = HAWK_FIRMWARE_VERSION;
+    doc["bootId"]    = bootId;
     doc["ipAddress"] = netDisplayIp().toString();
     doc["ssid"]      = netDisplaySsid();
     doc["rssi"]      = netRssi();
@@ -421,6 +447,7 @@ static void setupRoutes() {
     esp["temp"]   = temperatureRead();
     esp["wifiPs"] = netPowerSaving();
     esp["model"]  = ESP.getChipModel();
+    esp["cpuMhz"] = getCpuFrequencyMhz();
     esp["cores"]  = ESP.getChipCores();
     esp["rev"]    = ESP.getChipRevision();
     esp["ver"]    = ESP.getCoreVersion();
@@ -582,6 +609,7 @@ static void setupRoutes() {
 
 void webBegin(bool littlefsMounted) {
   littlefsOk = littlefsMounted;
+  bootId     = esp_random() | 1;   // never 0
   if (littlefsOk) removeStaleTempFiles();
   setupRoutes();
   server.begin();

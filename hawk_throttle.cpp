@@ -64,7 +64,7 @@ static const int      HANDOVER_MAX_ATTEMPTS = 5;
 
 // ── Shared state (web task <-> loop task) ─────────────────────────────────────
 static portMUX_TYPE     stateMux     = portMUX_INITIALIZER_UNLOCKED;
-static ThrottleState    target       = { FAMILY_MENDOCINO, DEFAULT_BASE_MHZ, 100.0f, 100.0f, false };
+static ThrottleState    target       = { FAMILY_MENDOCINO, DEFAULT_BASE_MHZ, 100.0f, 100.0f, false, 1 };
 static bool             applyPending = false;
 static bool             savePending  = false;
 static std::atomic<uint32_t> stateVersion{1};
@@ -325,7 +325,7 @@ bool throttleBegin() {
   if (baseMhz == 0) baseMhz = DEFAULT_BASE_MHZ;
 
   portENTER_CRITICAL(&stateMux);
-  target = { family, baseMhz, 100.0f, 100.0f, false };
+  target = { family, baseMhz, 100.0f, 100.0f, false, target.rev };
   portEXIT_CRITICAL(&stateMux);
 
   hwOk = rmtInit();
@@ -362,7 +362,7 @@ void throttleTick() {
       portENTER_CRITICAL(&stateMux);
       target.deliveredPercent = delivered;
       target.paused = (delivered == 0.0f);
-      stateVersion++;
+      target.rev = ++stateVersion;
       portEXIT_CRITICAL(&stateMux);
     }
   }
@@ -388,7 +388,7 @@ ThrottleState throttleRequestSpeed(float speedPercent) {
   target.deliveredPercent = delivered;
   target.paused = (delivered == 0.0f);
   applyPending = true;
-  stateVersion++;
+  target.rev = ++stateVersion;
   ThrottleState s = target;
   portEXIT_CRITICAL(&stateMux);
   return s;
@@ -410,7 +410,7 @@ ThrottleState throttleRequestConfig(uint8_t family, uint32_t baseMhz) {
   target.deliveredPercent = delivered;
   savePending  = true;
   applyPending = applyPending || familyChanged;   // timing may differ per family
-  stateVersion++;
+  target.rev = ++stateVersion;
   ThrottleState s = target;
   portEXIT_CRITICAL(&stateMux);
   return s;

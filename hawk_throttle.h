@@ -40,6 +40,7 @@ struct ThrottleState {
   float    requestedPercent;   // what the user asked for (0 = Pause, 100 = full)
   float    deliveredPercent;   // what the pattern really gives the CPU
   bool     paused;
+  uint32_t rev;                // bumps on every change; lets browsers drop stale updates
 };
 
 // Call as the very first thing in setup(): drives the 2N7002 gate low

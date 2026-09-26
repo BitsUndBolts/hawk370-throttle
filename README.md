@@ -24,7 +24,7 @@
 ## Features
 
 - **Two Wi‑Fi modes, one setup wizard** - join your home/lab network (STA), or run entirely standalone as its own access point (`HAWK370-Setup`) for bench use with no router required.
-- **Live throttle control** - drag the slider or click the MHz readout to type an exact value. The readout shows the speed the CPU actually gets. Resolution is about 0.03% from ~0.1% to ~99.9% of the base clock.
+- **Live throttle control** - drag the slider, use the 25 / 50 / 75 / 100 % presets, or click the MHz readout to type an exact value (Enter or a click outside applies it, Esc cancels). The readout shows the speed the CPU actually gets. Resolution is about 0.03% from ~0.1% to ~99.9% of the base clock.
 - **Pause at 0 MHz** - holds STPCLK# asserted; the CPU resumes exactly where it stopped when you move the slider. Power‑on is always full speed, so the PC always POSTs.
 - **Intel‑referenced timing** - in the middle of the range the STPCLK# pattern uses the same 244 µs period as the 440BX chipset's own throttle, with continuous duty; outside it the short phase stays at 32 µs and the period stretches. Speed changes are glitch‑free: no STPCLK# phase is ever shorter than 32 µs.
 - **Real‑time voltage & temperature telemetry** - VCORE and VTT rails streamed over Server‑Sent Events with live sparkline graphs, extensible to temperature monitoring.
@@ -81,6 +81,7 @@ On dual‑CPU boards only one HAWK 370 needs an ESP32: the 440BX chipset has a s
 | `/api/telemetry` | GET | One‑shot voltage/temp/RSSI/memory snapshot |
 | `/events` | SSE | `telemetry` every ~500 ms, `throttle` on every change (keeps several browsers in sync) |
 | `/api/system` | GET | Firmware version, IP, SSID, storage usage |
+| `/api/ping` | GET | Liveness probe with boot id and setup-mode flag (CORS open; used to find the device after a restart or Wi‑Fi reset) |
 | `/api/system/wifi-ps` | POST | Toggle Wi‑Fi power saving |
 | `/api/files/all` | GET | List files on LittleFS |
 | `/api/files/rename` / `/api/files/delete` | POST | Manage stored files |
