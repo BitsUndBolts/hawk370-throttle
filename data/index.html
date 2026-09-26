@@ -569,6 +569,7 @@
         </div>
         <div class="modal-body">
           <p>This will <strong>erase the saved network credentials</strong> and reboot the device into setup mode. You will need to configure a new network connection.</p>
+          <p>Your presets, CPU family and base clock are kept.</p>
           <div class="modal-actions">
             <button class="btn-cancel" onclick="closeResetModal()">Cancel</button>
             <button class="btn-confirm danger" onclick="executeReset()">Reset</button>
@@ -652,7 +653,7 @@
       <div class="modal-body">
         <div class="field">
           <label for="preset-name">Name</label>
-          <input type="text" id="preset-name" maxlength="40" autocomplete="off" spellcheck="false" placeholder="e.g. 386DX-40">
+          <input type="text" id="preset-name" maxlength="32" autocomplete="off" spellcheck="false" placeholder="e.g. 386DX-40">
         </div>
         <div class="field-row">
           <div class="field">
@@ -692,7 +693,8 @@
     let lastRev         = 0;       // newest firmware state revision applied
     let lastBootId      = null;    // revisions restart when the device reboots
     let userPresets     = [];      // [{name, mhz, refBaseMhz}] for the selected family, A-Z
-    let presetMax       = 128;
+    let presetMax       = 100;     // slots shared by all families
+    let presetTotal     = 0;       // used slots, all families
     let presetMenuOpen  = false;
     let presetFocus     = -1;      // keyboard-highlighted row in the filtered list
     let presetEditing   = null;    // original name while editing, null for a new preset
@@ -879,6 +881,7 @@
           userPresets = (data.presets || []).slice().sort((a, b) =>
             a.name.localeCompare(b.name, undefined, { sensitivity: 'base', numeric: true }));
           presetMax = data.max || presetMax;
+          presetTotal = data.total !== undefined ? data.total : presetTotal;
           renderPresetList();
           renderPresetLabel();
         })
@@ -971,7 +974,9 @@
       else if (e.key === 'Enter') {
         e.preventDefault();
         const p = items[presetFocus >= 0 ? presetFocus : 0];
+        const typed = $('preset-search').value.trim();
         if (p) applyPreset(p);
+        else if (typed) openPresetModal(null, typed);   // nothing found: offer to create it
       } else if (e.key === 'Escape') { e.preventDefault(); closePresetMenu(); $('preset-trigger').focus(); }
     });
     $('preset-list').addEventListener('click', e => {
@@ -983,21 +988,21 @@
     });
 
     /* Editor modal: new preset (from the current speed) or edit/delete. */
-    function openPresetModal(preset) {
+    // `prefillName` carries what was typed into the search box, so a name
+    // that was searched for and not found does not have to be typed again.
+    function openPresetModal(preset, prefillName) {
       closePresetMenu();
       presetEditing = preset ? preset.name : null;
       $('preset-modal-title').textContent = preset ? 'Edit Preset' : 'New Preset';
-      $('preset-name').value = preset ? preset.name : '';
+      $('preset-name').value = preset ? preset.name : (prefillName || '');
       $('preset-mhz').value  = preset ? preset.mhz : targetMhz;
       $('preset-ref').value  = preset ? (preset.refBaseMhz || '') : baseMhzCache;
       const famName = (cpuFamilies.find(f => f.id === selectedFamily) || {}).name || 'this family';
       $('preset-family-hint').textContent =
-        `Saved for ${famName}. The MHz is kept as-is on other ${famName} CPUs; the base clock is just a note.`;
+        `Saved for ${famName}. The MHz is kept as-is on other ${famName} CPUs; the base clock is just a note. ` +
+        `${presetTotal} of ${presetMax} preset slots used (all families).`;
       $('preset-error').textContent = '';
-      const del = $('preset-delete');
-      del.classList.toggle('hidden', !preset);
-      del.textContent = 'Delete';
-      del.dataset.armed = '';
+      $('preset-delete').classList.toggle('hidden', !preset);
       $('preset-modal-overlay').classList.add('visible');
       setTimeout(() => $('preset-name').focus(), 50);
     }
@@ -1018,8 +1023,8 @@
       const ref  = parseInt($('preset-ref').value, 10) || 0;
       if (!name) { $('preset-error').textContent = 'Please enter a name.'; return; }
       if (!(mhz >= 1 && mhz <= 9999)) { $('preset-error').textContent = 'MHz must be between 1 and 9999.'; return; }
-      if (!presetEditing && userPresets.length >= presetMax) {
-        $('preset-error').textContent = `This family already has ${presetMax} presets.`;
+      if (!presetEditing && presetTotal >= presetMax) {
+        $('preset-error').textContent = `All ${presetMax} preset slots are used. Delete or export some first.`;
         return;
       }
       const body = { family: selectedFamily, name, mhz, refBaseMhz: ref };
@@ -1038,10 +1043,8 @@
       }
     }
 
-    // Two clicks to delete: the first arms the button.
+    // The editor itself is the confirmation step, so one click deletes.
     $('preset-delete').addEventListener('click', async () => {
-      const del = $('preset-delete');
-      if (!del.dataset.armed) { del.dataset.armed = '1'; del.textContent = 'Click again to delete'; return; }
       try {
         const r = await fetch('/api/presets/delete', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -1057,7 +1060,11 @@
       }
     });
 
-    $('preset-add').addEventListener('click', () => openPresetModal(null));
+    $('preset-add').addEventListener('click', () => {
+      const typed = $('preset-search').value.trim();
+      const exists = userPresets.some(p => p.name.toLowerCase() === typed.toLowerCase());
+      openPresetModal(null, exists ? '' : typed);
+    });
 
     $('preset-export').addEventListener('click', async () => {
       closePresetMenu();

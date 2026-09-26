@@ -12,12 +12,18 @@
 // just recomputes the duty. refBaseMhz records the CPU it was measured on,
 // for reference only.
 //
-// Storage: one small JSON file per family in LittleFS (/presets/<slug>.json),
-// written atomically. NVS would only hold a couple of hundred presets in total.
-// Flashing a storage image replaces LittleFS; the Files page backs presets up
-// and restores them around such a flash.
+// Storage: all families together in ONE compact binary record in NVS
+// (namespace "presets"), not in LittleFS. NVS is its own flash partition, so
+// firmware updates, storage-image flashes and USB uploads leave it alone, and
+// a Wi-Fi reset only clears the "wifi-config" namespace.
 //
-// All calls happen on the AsyncTCP task (web handlers); a mutex guards anyway.
+// Budget: the NVS partition is 20 KB and also holds the Wi-Fi driver's data
+// and PHY calibration. A record is 6 bytes + the name, so 100 presets with
+// 32-byte names are at most ~3.8 KB (typically ~2 KB). NVS writes a new copy
+// before erasing the old one, so the record has to fit twice: 100 is safe.
+//
+// Presets live in RAM after boot; every change rewrites the record. A change
+// that cannot be written is rolled back. All calls happen on the web task.
 // =============================================================================
 
 #pragma once
@@ -25,9 +31,9 @@
 #include <Arduino.h>
 #include <ArduinoJson.h>
 
-static const size_t PRESETS_MAX_PER_FAMILY = 128;
-static const size_t PRESET_NAME_MAX_BYTES  = 40;    // UTF-8 bytes
-static const uint16_t PRESET_MHZ_MAX       = 9999;
+static const size_t   PRESETS_MAX_TOTAL     = 100;   // all families together
+static const size_t   PRESET_NAME_MAX_BYTES = 32;    // UTF-8 bytes
+static const uint16_t PRESET_MHZ_MAX        = 9999;
 
 enum PresetResult : uint8_t {
   PRESET_OK = 0,
@@ -41,20 +47,23 @@ enum PresetResult : uint8_t {
 struct PresetImportStats {
   uint16_t added   = 0;
   uint16_t updated = 0;
-  uint16_t skipped = 0;   // invalid entries, or the family is full
+  uint16_t skipped = 0;   // invalid entries, or no free slots left
 };
 
+// Loads the presets from NVS. If an older firmware (0.4) left presets in
+// LittleFS under /presets, they are moved into NVS once and the files removed.
 bool presetsBegin(bool littlefsOk);
 
-// Fills `out` with {name, mhz, refBaseMhz} objects, sorted by name (A-Z).
+// Fills `out` with {name, mhz, refBaseMhz} objects of one family, A-Z.
 bool presetsList(uint8_t family, JsonArray out);
+size_t presetsCount();   // all families
 
 // Creates, or with originalName set, edits (and possibly renames) a preset.
 PresetResult presetsSave(uint8_t family, const String& name, uint16_t mhz, uint16_t refBaseMhz,
                          const String& originalName);
 PresetResult presetsDelete(uint8_t family, const String& name);
 
-// Merge: same name (case-insensitive) is updated, new names are added.
+// Merge into one family: same name (case-insensitive) is updated, new names added.
 PresetResult presetsImport(uint8_t family, JsonArrayConst items, PresetImportStats& stats);
 
 const char* presetResultText(PresetResult r);

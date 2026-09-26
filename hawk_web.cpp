@@ -543,7 +543,8 @@ static void setupRoutes() {
     doc["family"]     = family;
     doc["familyName"] = CPU_FAMILIES[family].name;
     doc["familySlug"] = CPU_FAMILIES[family].slug;
-    doc["max"]        = PRESETS_MAX_PER_FAMILY;
+    doc["max"]        = PRESETS_MAX_TOTAL;   // shared by all families
+    doc["total"]      = presetsCount();
     if (!presetsList((uint8_t) family, doc["presets"].to<JsonArray>())) {
       sendStatus(request, 503, "error", presetResultText(PRESET_STORAGE_ERROR));
       return;

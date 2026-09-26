@@ -654,12 +654,6 @@
       const pre = await probeDevice();
       if (pre) bootIdBeforeFlash = pre.bootId;
 
-      // A storage image replaces all of LittleFS, including the presets.
-      // Keep a copy in the browser and put it back after the reboot.
-      presetBackup = null;
-      if (queue.some(e => e.isImage && e.status === 'pending')) {
-        try { presetBackup = await exportAllPresets(); } catch (_) { presetBackup = null; }
-      }
 
       // Reset global status
       statusMsg.className = 'notice';
@@ -792,22 +786,6 @@
     // Polls the device until it answers with a new boot id. A storage image
     // replaced this very page, so that case reloads; firmware just refreshes.
     let bootIdBeforeFlash = null;
-    let presetBackup = null;
-
-    async function restorePresets() {
-      if (!presetBackup || !presetBackup.presets.length) return;
-      const n = presetBackup.presets.length;
-      rebootSec.textContent = `Restoring ${n} preset${n === 1 ? '' : 's'}…`;
-      try {
-        await importPresetsObject(presetBackup);
-      } catch (_) {
-        // Never lose them: hand the user the backup as a file instead.
-        rebootSec.textContent = 'Could not restore presets — saving a backup file instead…';
-        downloadJson(presetBackup, `hawk370-presets-backup-${new Date().toISOString().slice(0, 10)}.json`);
-        await new Promise(r => setTimeout(r, 3000));
-      }
-      presetBackup = null;
-    }
 
     function waitForReboot(reloadPage) {
       rebootRow.classList.add('visible');
@@ -816,11 +794,7 @@
       const poll = async () => {
         const info = await probeDevice();
         if (info && info.bootId !== bootIdBeforeFlash) {
-          if (reloadPage) {
-            await restorePresets();
-            window.location.reload();
-            return;
-          }
+          if (reloadPage) { window.location.reload(); return; }
           bootIdBeforeFlash = info.bootId;
           rebootSec.textContent = `Back online — firmware v${info.firmware}`;
           queue = queue.filter(e => e.status !== 'done');

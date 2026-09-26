@@ -25,6 +25,7 @@ class String {
   bool operator==(const String& o) const { return s == o.s; }
   bool concat(const char* b, size_t n) { s.append(b, n); return true; }
   bool concat(const char* b) { s.append(b); return true; }
+  bool concat(char c) { s.push_back(c); return true; }
   void reserve(size_t n) { s.reserve(n); }
 };
 struct SerialShim { void printf(const char* f, ...) { va_list a; va_start(a, f); vprintf(f, a); va_end(a); } void println(const char* x) { puts(x); } };

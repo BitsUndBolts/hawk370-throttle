@@ -14,7 +14,11 @@ class File {
   void close() {}
 };
 struct LittleFSShim {
-  bool exists(const String& p) { return fsStore.files.count(p.s) || p.s == "/presets"; }
+  bool exists(const String& p) {
+    if (fsStore.files.count(p.s)) return true;
+    for (auto& kv : fsStore.files) if (kv.first.rfind(p.s + "/", 0) == 0) return true;   // a directory
+    return false; }
+  bool rmdir(const String&) { return true; }
   bool mkdir(const String&) { return true; }
   bool remove(const String& p) { return fsStore.files.erase(p.s) > 0; }
   bool rename(const String& a, const String& b) { if (fsStore.failRename) return false; fsStore.files[b.s] = fsStore.files[a.s]; fsStore.files.erase(a.s); return true; }
