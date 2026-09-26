@@ -226,6 +226,8 @@
       box-shadow: 0 0 6px var(--accent-glow); cursor: pointer; border-radius: 0;
     }
 
+    .key-hint { font-size: 0.7em; color: var(--text-3); margin-top: 0.9em; opacity: 0.8; }
+    @media (hover: none) { .key-hint { display: none; } }   /* touch screens have no keyboard */
     .slider-endpoints { display: flex; justify-content: space-between; font-size: 0.75em; color: var(--text-3); margin-top: 0.5em; /*padding-left: 4.2em;*/ }
 
     /* ── POWER RAILS ── */
@@ -379,6 +381,7 @@
           <span>0 MHz — paused</span>
           <span id="slider-max-label">100 MHz — full speed</span>
         </div>
+        <div class="key-hint">Keys: ← → ±1 MHz · Shift ±10 MHz · 1–4 presets</div>
       </div>
     </div>
 
@@ -613,7 +616,7 @@
     // The big number shows what the CPU really gets (delivered), falling back
     // to the requested value until the firmware has answered.
     function formatMhz(mhz) {
-      return mhz > 0 && mhz < 10 ? mhz.toFixed(1) : String(Math.round(mhz));
+      return String(Math.round(mhz));
     }
 
     function updateReadoutDisplay() {
@@ -629,6 +632,9 @@
         : `<span class="approx">≈ approx.</span> <span id="readout-sub-pct">${shownPct.toFixed(1)}%</span> of base clock`;
 
       renderPresets();
+
+      // Live speed in the browser tab, handy when the dashboard is in the background.
+      document.title = paused ? 'Paused · HAWK 370' : `${formatMhz(shownMhz)} MHz · HAWK 370`;
 
       const slider = $('speed-slider');
       slider.max   = baseMhzCache;
@@ -756,6 +762,30 @@
     }
 
     $('readout-value-wrap').addEventListener('click', startMhzEdit);
+
+    /* ── KEYBOARD SHORTCUTS ──
+       ← / →  ±1 MHz, with Shift ±10 MHz;  1-4  the percent presets.
+       Ignored while typing in a field, with a modal open, or with Ctrl/Alt/Cmd. */
+    document.addEventListener('keydown', e => {
+      if (e.ctrlKey || e.altKey || e.metaKey) return;
+      const el = document.activeElement;
+      if (el && (el.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(el.tagName)) &&
+          el.id !== 'speed-slider') return;
+      if (document.querySelector('.modal-overlay.visible')) return;
+      if (cpuMenuOpen) return;
+
+      if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+        e.preventDefault();   // also stops the focused slider's own ±1 step
+        const step = (e.shiftKey ? 10 : 1) * (e.key === 'ArrowLeft' ? -1 : 1);
+        setTargetMhz(targetMhz + step, true, false);
+        return;
+      }
+      const presetKey = /^(?:Digit|Numpad)([1-4])$/.exec(e.code);
+      if (presetKey) {
+        const btn = document.querySelectorAll('#speed-presets .freq-btn')[Number(presetKey[1]) - 1];
+        if (btn) { e.preventDefault(); btn.click(); }
+      }
+    });
 
     /* ── QUICK SPEED PRESETS (percent of the base clock) ── */
     function renderPresets() {

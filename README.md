@@ -24,7 +24,7 @@
 ## Features
 
 - **Two Wi‑Fi modes, one setup wizard** - join your home/lab network (STA), or run entirely standalone as its own access point (`HAWK370-Setup`) for bench use with no router required.
-- **Live throttle control** - drag the slider, use the 25 / 50 / 75 / 100 % presets, or click the MHz readout to type an exact value (Enter or a click outside applies it, Esc cancels). The readout shows the speed the CPU actually gets. Resolution is about 0.03% from ~0.1% to ~99.9% of the base clock.
+- **Live throttle control** - drag the slider, use the 25 / 50 / 75 / 100 % presets, or click the MHz readout to type an exact value (Enter or a click outside applies it, Esc cancels). Keyboard: ← / → ±1 MHz, Shift ±10 MHz, 1–4 for the presets. The browser tab shows the live speed. The readout shows the speed the CPU actually gets. Resolution is about 0.03% from ~0.1% to ~99.9% of the base clock.
 - **Pause at 0 MHz** - holds STPCLK# asserted; the CPU resumes exactly where it stopped when you move the slider. Power‑on is always full speed, so the PC always POSTs.
 - **Intel‑referenced timing** - in the middle of the range the STPCLK# pattern uses the same 244 µs period as the 440BX chipset's own throttle, with continuous duty; outside it the short phase stays at 32 µs and the period stretches. Speed changes are glitch‑free: no STPCLK# phase is ever shorter than 32 µs.
 - **Real‑time voltage & temperature telemetry** - VCORE and VTT rails streamed over Server‑Sent Events with live sparkline graphs, extensible to temperature monitoring.
