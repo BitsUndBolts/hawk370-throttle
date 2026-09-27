@@ -1,0 +1,7 @@
+# Cloudflare Worker that relays HAWK 370 release files for the web installer.
+# Deploy from this folder with:  wrangler deploy
+# The name gives the address the installer uses:
+#   https://hawk370-throttle-releases.bitsundbolts.workers.dev
+name = "hawk370-throttle-releases"
+main = "worker.js"
+compatibility_date = "2026-06-01"

@@ -50,9 +50,8 @@ struct PresetImportStats {
   uint16_t skipped = 0;   // invalid entries, or no free slots left
 };
 
-// Loads the presets from NVS. If an older firmware (0.4) left presets in
-// LittleFS under /presets, they are moved into NVS once and the files removed.
-bool presetsBegin(bool littlefsOk);
+// Loads the presets from NVS.
+bool presetsBegin();
 
 // Fills `out` with {name, mhz, refBaseMhz} objects of one family, A-Z.
 bool presetsList(uint8_t family, JsonArray out);

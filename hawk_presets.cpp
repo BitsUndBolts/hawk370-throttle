@@ -7,7 +7,6 @@
 #include "hawk_throttle.h"
 
 #include <Preferences.h>
-#include <LittleFS.h>
 #include <atomic>
 #include <mutex>
 #include <vector>
@@ -123,50 +122,9 @@ static PresetResult commit(std::vector<Preset>& next, uint8_t family) {
   return PRESET_OK;
 }
 
-// ── One-time move of v0.4 presets out of LittleFS ────────────────────────────
-
-static void migrateFromLittleFs() {
-  const char* dir = "/presets";
-  if (!LittleFS.exists(dir)) return;
-
-  std::vector<Preset> next = presets;
-  size_t moved = 0;
-  for (uint8_t f = 0; f < FAMILY_COUNT; f++) {
-    const String path = String(dir) + "/" + CPU_FAMILIES[f].slug + ".json";
-    if (!LittleFS.exists(path)) continue;
-    File file = LittleFS.open(path, "r");
-    if (!file) continue;
-    JsonDocument doc;
-    const bool ok = !deserializeJson(doc, file);
-    file.close();
-    if (!ok) continue;
-    for (JsonObjectConst o : doc.as<JsonArrayConst>()) {
-      const String name = cleanName(o["n"] | "");
-      const int mhz = o["m"] | 0;
-      const int ref = o["r"] | 0;
-      if (name.isEmpty() || !validMhz(mhz) || !validRef(ref)) continue;
-      if (findIndex(next, f, name) >= 0 || next.size() >= PRESETS_MAX_TOTAL) continue;
-      next.push_back({ f, name, (uint16_t) mhz, (uint16_t) ref });
-      moved++;
-    }
-  }
-
-  if (moved && commit(next, 0) != PRESET_OK) {
-    Serial.println("[PRESETS] Could not move LittleFS presets into NVS; leaving the files in place");
-    return;
-  }
-  for (uint8_t f = 0; f < FAMILY_COUNT; f++) {
-    const String path = String(dir) + "/" + CPU_FAMILIES[f].slug + ".json";
-    if (LittleFS.exists(path)) LittleFS.remove(path);
-    if (LittleFS.exists(path + ".tmp")) LittleFS.remove(path + ".tmp");
-  }
-  LittleFS.rmdir(dir);
-  Serial.printf("[PRESETS] Moved %u preset(s) from LittleFS into NVS\n", (unsigned) moved);
-}
-
 // ── Public API ───────────────────────────────────────────────────────────────
 
-bool presetsBegin(bool littlefsOk) {
+bool presetsBegin() {
   std::lock_guard<std::mutex> lock(presetMutex);
   Preferences prefs;
   prefs.begin(NVS_NAMESPACE, true);
@@ -182,7 +140,6 @@ bool presetsBegin(bool littlefsOk) {
   prefs.end();
   loaded = true;
 
-  if (littlefsOk) migrateFromLittleFs();
   Serial.printf("[PRESETS] %u of %u preset slots used\n", (unsigned) presets.size(), (unsigned) PRESETS_MAX_TOTAL);
   return true;
 }

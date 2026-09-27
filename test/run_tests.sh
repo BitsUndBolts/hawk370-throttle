@@ -19,7 +19,7 @@ if [ -z "$AJ" ]; then
   echo "ArduinoJson not found: skipping the preset test (set ARDUINOJSON_SRC)"
   exit 0
 fi
-# test/shims provides Arduino.h, Preferences.h, LittleFS.h and a String stand-in
+# test/shims provides Arduino.h, Preferences.h and a String stand-in
 $CXX -std=c++17 -O2 -Itest/shims -I"$AJ" -include test/shims/ArduinoJsonShim.h \
      -o test/build/presets_test test/presets_test.cpp hawk_presets.cpp -lpthread
 ./test/build/presets_test

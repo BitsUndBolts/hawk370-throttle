@@ -57,7 +57,9 @@ void throttleTick();
 
 // Thread-safe, callable from web handlers. Return the resulting state.
 ThrottleState throttleRequestSpeed(float speedPercent);
-ThrottleState throttleRequestConfig(uint8_t family, uint32_t baseMhz);
+// speedPercent < 0 keeps the current speed; otherwise family, base clock and
+// speed switch together in one step (the dashboard's APPLY button).
+ThrottleState throttleRequestConfig(uint8_t family, uint32_t baseMhz, float speedPercent = -1.0f);
 
 ThrottleState throttleGetState();
 uint32_t      throttleStateVersion();   // bumps on every change, for SSE sync

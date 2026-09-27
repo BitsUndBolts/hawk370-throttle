@@ -525,11 +525,27 @@
       return isFirmwareFile(file) && file.name.toLowerCase().includes('littlefs');
     }
 
+    // Release files that only the USB web installer writes. The bootloader
+    // even passes the firmware checks, so these are refused by name; images
+    // larger than their partition are refused before anything is written.
+    const INSTALLER_ONLY     = /bootloader|partitions|boot_app0|merged|autoflash/i;
+    const APP_SLOT_BYTES     = 0x140000;   // app0 / app1 in partitions.csv
+    const STORAGE_PART_BYTES = 0x160000;   // spiffs (LittleFS) in partitions.csv
+    function rejectReason(file) {
+      if (!isFirmwareFile(file)) return '';
+      if (INSTALLER_ONLY.test(file.name)) return `${file.name} is for the USB web installer, not for OTA`;
+      const limit = isStorageImage(file) ? STORAGE_PART_BYTES : APP_SLOT_BYTES;
+      if (file.size > limit) return `${file.name} is too large (${Math.ceil(file.size / 1024)} KB, max ${limit / 1024} KB)`;
+      return '';
+    }
+
     /* ── QUEUE MANAGEMENT ───────────────────────────────────────────────── */
     function addFiles(files) {
       for (const file of files) {
         // Deduplicate by name
         if (queue.some(e => e.file.name === file.name)) continue;
+        const why = rejectReason(file);
+        if (why) { showToast(why, 'fail'); continue; }
         // The device reboots after flashing, so only one image per run.
         if (isFirmwareFile(file) && queue.some(e => e.isFirmware && e.status === 'pending')) {
           showToast('Only one .bin image per upload run', 'fail');

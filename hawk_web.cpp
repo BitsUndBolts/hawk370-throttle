@@ -495,7 +495,7 @@ static void setupRoutes() {
     request->send(200, "application/json", throttleJson());
   });
 
-  // body: { "family": int, "baseMhz": int }
+  // body: { "family": int, "baseMhz": int, "speedPercent"?: number 0-100 }
   onJsonPost("/api/throttle/config", [](AsyncWebServerRequest* request, JsonVariant& json) {
     if (!json["family"].is<int>() || !json["baseMhz"].is<int>()) {
       sendStatus(request, 400, "error", "Expected integer family and baseMhz");
@@ -507,7 +507,20 @@ static void setupRoutes() {
       sendStatus(request, 400, "error", "family or baseMhz out of range");
       return;
     }
-    const ThrottleState s = throttleRequestConfig((uint8_t) family, (uint32_t) baseMhz);
+    // Optional speedPercent (0-100): switch family, base clock and speed in one step.
+    float speedPercent = -1.0f;
+    if (!json["speedPercent"].isNull()) {
+      if (!json["speedPercent"].is<float>()) {
+        sendStatus(request, 400, "error", "speedPercent must be a number 0-100");
+        return;
+      }
+      speedPercent = json["speedPercent"].as<float>();
+      if (!(speedPercent >= 0.0f && speedPercent <= 100.0f)) {
+        sendStatus(request, 400, "error", "speedPercent must be 0-100");
+        return;
+      }
+    }
+    const ThrottleState s = throttleRequestConfig((uint8_t) family, (uint32_t) baseMhz, speedPercent);
     JsonDocument doc;
     doc["status"] = "success";
     fillThrottle(doc.as<JsonObject>(), s);
@@ -687,7 +700,7 @@ void webBegin(bool littlefsMounted) {
   littlefsOk = littlefsMounted;
   bootId     = esp_random() | 1;   // never 0
   if (littlefsOk) removeStaleTempFiles();
-  presetsBegin(littlefsOk);
+  presetsBegin();
   setupRoutes();
   server.begin();
   Serial.println("[SYSTEM] Web server started.");

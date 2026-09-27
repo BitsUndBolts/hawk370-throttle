@@ -99,6 +99,9 @@
     .select-option.selected { background: var(--accent-dim); color: var(--accent); }
 
     .mhz-field { display: flex; flex-direction: column; gap: 0.4em; }
+    .cpu-field { display: flex; flex-direction: column; gap: 0.4em; flex: 1; min-width: 14em; }
+    .cpu-field .select-wrap { flex: none; min-width: 0; }
+    .cpu-field label,
     .mhz-field label {
       font-family: var(--mono);
       font-size: 0.8em;
@@ -106,7 +109,18 @@
       text-transform: uppercase;
       color: var(--text-3);
     }
+    .mhz-controls { display: flex; align-items: stretch; gap: 0.6em; }
     .mhz-input-wrap { position: relative; width: 9em; }
+    /* APPLY: grey and inactive until the family or base clock on the page
+       differs from what the device runs */
+    .apply-btn {
+      font-family: var(--mono); font-size: 0.95em; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase;
+      padding: 0 1.2em; border: 1px solid var(--accent); background: var(--accent); color: var(--bg);
+      cursor: pointer; transition: background 0.15s, color 0.15s, border-color 0.15s, box-shadow 0.15s;
+    }
+    .apply-btn:not(:disabled):hover { box-shadow: 0 0 1.5em var(--accent-glow); }
+    .apply-btn:focus-visible { outline: 1px dashed var(--accent); outline-offset: 2px; }
+    .apply-btn:disabled { background: var(--panel-2); border-color: var(--border-bright); color: var(--text-3); cursor: not-allowed; }
     .mhz-input-wrap input {
       background: var(--panel-2);
       border: 1px solid var(--border-bright);
@@ -176,6 +190,14 @@
       letter-spacing: 0.02em;
     }
     .readout .unit { font-size: 0.4em; color: var(--accent-solid-dim); margin-left: 0.15em; }
+    /* The number stays centred; the % buttons hang to the right of "MHz". */
+    .readout-row { position: relative; display: inline-block; }
+    .freq-stack {
+      position: absolute; left: 100%; top: 50%; transform: translateY(-50%); margin-left: 1em;
+      flex-direction: column; align-items: stretch;
+    }
+    .freq-stack .freq-btn { font-size: 0.78em; line-height: 1.2; padding: 0.2em 0.6em; min-width: 4.2em; }
+    .freq-stack .freq-btn + .freq-btn { border-left: none; border-top: 1px solid var(--border-bright); }
     .readout-sub { font-family: var(--mono); font-size: 0.85em; color: var(--text-3); margin-top: 0.6em; letter-spacing: 0.03em; }
     .readout-sub .approx { color: var(--accent-solid-dim); }
 
@@ -202,10 +224,9 @@
       -moz-appearance: textfield;
       appearance: textfield;
     }
-    .preset-row { margin-top: 1.1em; }
 
     /* ── USER PRESETS (searchable dropdown) ── */
-    .user-presets { display: flex; justify-content: center; margin-top: 0.9em; }
+    .user-presets { display: flex; justify-content: center; margin-top: 1.2em; }
     .preset-select { flex: 0 1 26em; min-width: 16em; text-align: left; }
     .preset-select .select-trigger { font-size: 0.95em; padding: 0.6em 2.2em 0.6em 0.9em; }
     #preset-label .muted { color: var(--text-3); }
@@ -245,7 +266,7 @@
     .btn-delete-preset { color: var(--red); border-color: rgba(255, 92, 92, 0.35); }
     .btn-delete-preset:hover { background: var(--red-dim); color: var(--red); }
     .reset-probe { margin-top: 1em; font-size: 0.85em; color: var(--text-3); }
-    .preset-row .freq-btn { min-width: 4.4em; }
+
     .readout-input::-webkit-outer-spin-button,
     .readout-input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
     #speed-slider {
@@ -342,6 +363,8 @@
     /* ── RESPONSIVE ── */
     @media (max-width: 480px) {
       .readout { font-size: 3.6em; }
+      .freq-stack { margin-left: 0.7em; }
+      .freq-stack .freq-btn { font-size: 0.7em; padding: 0.12em 0.5em; min-width: 3.8em; }
       .volt-grid { grid-template-columns: 1fr; }
       .cpu-row { align-items: flex-start; }
     }
@@ -377,20 +400,26 @@
     <div class="section-label">CPU Configuration</div>
     <div class="panel">
       <div class="cpu-row">
-        <div class="select-wrap" id="cpu-select">
-          <button type="button" class="select-trigger" id="cpu-select-trigger" aria-haspopup="listbox" aria-expanded="false">
-            <span id="cpu-select-label">—</span>
-          </button>
-          <div class="select-menu hidden" id="cpu-select-menu" role="listbox"></div>
+        <div class="cpu-field">
+          <label for="cpu-select-trigger">CPU Family</label>
+          <div class="select-wrap" id="cpu-select">
+            <button type="button" class="select-trigger" id="cpu-select-trigger" aria-haspopup="listbox" aria-expanded="false">
+              <span id="cpu-select-label">—</span>
+            </button>
+            <div class="select-menu hidden" id="cpu-select-menu" role="listbox"></div>
+          </div>
         </div>
         <div class="mhz-field">
           <label for="base-mhz">Base Clock (MHz)</label>
-          <div class="mhz-input-wrap">
-            <input type="number" id="base-mhz" min="1" max="9999" step="1" inputmode="numeric" autocomplete="off" oninput="if (this.value.length > 4) this.value = this.value.slice(0, 4);">
-            <div class="mhz-steppers">
-              <button type="button" class="mhz-step" id="mhz-up" tabindex="-1" aria-label="Increase base clock">▲</button>
-              <button type="button" class="mhz-step" id="mhz-down" tabindex="-1" aria-label="Decrease base clock">▼</button>
+          <div class="mhz-controls">
+            <div class="mhz-input-wrap">
+              <input type="number" id="base-mhz" min="1" max="9999" step="1" inputmode="numeric" autocomplete="off" oninput="if (this.value.length > 4) this.value = this.value.slice(0, 4);">
+              <div class="mhz-steppers">
+                <button type="button" class="mhz-step" id="mhz-up" tabindex="-1" aria-label="Increase base clock">▲</button>
+                <button type="button" class="mhz-step" id="mhz-down" tabindex="-1" aria-label="Decrease base clock">▼</button>
+              </div>
             </div>
+            <button type="button" class="apply-btn" id="config-apply" disabled title="Nothing to apply">Apply</button>
           </div>
         </div>
       </div>
@@ -405,16 +434,16 @@
 
     <!-- ── THROTTLE READOUT + SLIDER ── -->
     <div class="panel readout-panel">
-      <div class="readout"><span class="readout-value-wrap" id="readout-value-wrap" title="Click to enter a target MHz"><span id="readout-value">0</span></span><span class="unit">MHz</span></div>
-      <div class="readout-sub" id="readout-sub"><span class="approx">≈ approx.</span> <span id="readout-sub-pct">0%</span> of base clock</div>
-      <div class="preset-row">
-        <span class="freq-toggle" id="speed-presets" role="group" aria-label="Quick speed presets">
+      <div class="readout-row">
+        <div class="readout"><span class="readout-value-wrap" id="readout-value-wrap" title="Click to enter a target MHz"><span id="readout-value">0</span></span><span class="unit">MHz</span></div>
+        <span class="freq-toggle freq-stack" id="speed-presets" role="group" aria-label="Quick speed presets">
           <button type="button" class="freq-btn" data-pct="25">25%</button>
           <button type="button" class="freq-btn" data-pct="50">50%</button>
           <button type="button" class="freq-btn" data-pct="75">75%</button>
           <button type="button" class="freq-btn" data-pct="100">100%</button>
         </span>
       </div>
+      <div class="readout-sub" id="readout-sub"><span class="approx">≈ approx.</span> <span id="readout-sub-pct">0%</span> of base clock</div>
       <div class="user-presets">
         <div class="select-wrap preset-select" id="preset-select">
           <button type="button" class="select-trigger" id="preset-trigger" aria-haspopup="listbox" aria-expanded="false">
@@ -593,7 +622,7 @@
             </div>
             <div class="step-row">
               <div class="step-num">2</div>
-              <div class="step-text">Connect to hotspot: <strong>HAWK370-Setup</strong></div>
+              <div class="step-text">Connect to hotspot: <strong>HAWK370-Setup</strong>, password <strong>hawk370setup</strong></div>
             </div>
             <div class="step-row">
               <div class="step-num">3</div>
@@ -684,8 +713,9 @@
     let selectedFamily  = null;
     let cpuMenuOpen     = false;
     let baseMhzCache    = 300;
+    let deviceFamily    = null;    // family / base clock the device runs with
+    let deviceBaseMhz   = null;    //   (the page may hold a staged change until APPLY)
     let speedSendTimer  = null;
-    let lastSpeedSend   = 0;
     let speedSeq        = 0;       // only the newest response may repaint
     let localChangeAt   = 0;       // ignore SSE echoes while the user is dragging
     let delivered       = null;    // { mhz, pct, paused } as reported by the firmware
@@ -698,7 +728,7 @@
     let presetMenuOpen  = false;
     let presetFocus     = -1;      // keyboard-highlighted row in the filtered list
     let presetEditing   = null;    // original name while editing, null for a new preset
-    const SPEED_SEND_INTERVAL_MS = 120;
+    const SLIDER_DEBOUNCE_MS = 250;   // slider / arrow keys: send once they rest this long
 
     // targetMhz is the single source of truth for "what speed is commanded"
     // in this UI. The wire format is still speedPercent (0-100, now a
@@ -755,7 +785,7 @@
       delivered = null;            // until the firmware reports the real value
       localChangeAt = Date.now();
       updateReadoutDisplay();
-      if (send) sendSpeedMhz(immediate);
+      if (send && !configPending()) sendSpeedMhz(immediate);   // staged: goes out with APPLY
     }
 
     // Applies a throttle state from the firmware (POST response or SSE).
@@ -768,6 +798,17 @@
       if (data.rev !== undefined) {
         if (data.rev < lastRev) return;
         lastRev = data.rev;
+      }
+      // A staged family / base clock stays on the page until APPLY, whatever
+      // the device reports meanwhile (unless it now matches the staged one).
+      const wasPending = configPending();
+      if (data.family !== undefined) deviceFamily = data.family;
+      if (data.baseMhz) deviceBaseMhz = data.baseMhz;
+      if (wasPending && configPending()) {
+        delivered = null;
+        updateApplyButton();
+        updateReadoutDisplay();
+        return;
       }
       if (data.baseMhz && data.baseMhz !== baseMhzCache && document.activeElement !== $('base-mhz')) {
         baseMhzCache = data.baseMhz;
@@ -788,31 +829,45 @@
         loadPresets();
       }
       if (data.verified !== undefined) renderCalibWarning(data.verified);
+      updateApplyButton();
       updateReadoutDisplay();
     }
 
-    // Sends at most every SPEED_SEND_INTERVAL_MS while dragging, and always
-    // the final value, so the CPU follows the slider live.
+    // Buttons, presets, typed values and the slider's release send at once.
+    // Dragging the slider and holding an arrow key only send once the value
+    // has rested SLIDER_DEBOUNCE_MS, so the CPU is not re-throttled on every
+    // single step of a drag.
     function sendSpeedMhz(immediate) {
+      cancelSpeedSend();
+      if (immediate) doSendSpeed();
+      else speedSendTimer = setTimeout(() => { speedSendTimer = null; doSendSpeed(); }, SLIDER_DEBOUNCE_MS);
+    }
+
+    function flushSpeedSend() {         // a debounced value is waiting: send it now
+      if (speedSendTimer === null) return;
+      cancelSpeedSend();
+      doSendSpeed();
+    }
+
+    function cancelSpeedSend() {
       clearTimeout(speedSendTimer);
-      const doSend = () => {
-        lastSpeedSend = Date.now();
-        const speedPercent = baseMhzCache > 0 ? (targetMhz / baseMhzCache * 100) : 0;
-        const seq = ++speedSeq;
-        inFlight++;
-        fetch('/api/throttle/speed', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ speedPercent })
-        })
-          .then(r => { if (!r.ok) throw new Error(r.status); return r.json(); })
-          .then(data => { if (seq === speedSeq) applyThrottleState(data, false); })
-          .catch(() => showToast('Failed to set speed', 'fail'))
-          .finally(() => { inFlight--; });
-      };
-      const wait = immediate ? 0 : Math.max(0, SPEED_SEND_INTERVAL_MS - (Date.now() - lastSpeedSend));
-      if (wait === 0) doSend();
-      else speedSendTimer = setTimeout(doSend, wait);
+      speedSendTimer = null;
+    }
+
+    function doSendSpeed() {
+      if (configPending()) return;      // staged: goes out with APPLY
+      const speedPercent = baseMhzCache > 0 ? (targetMhz / baseMhzCache * 100) : 0;
+      const seq = ++speedSeq;
+      inFlight++;
+      fetch('/api/throttle/speed', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ speedPercent })
+      })
+        .then(r => { if (!r.ok) throw new Error(r.status); return r.json(); })
+        .then(data => { if (seq === speedSeq) applyThrottleState(data, false); })
+        .catch(() => showToast('Failed to set speed', 'fail'))
+        .finally(() => { inFlight--; });
     }
 
     /* ── CLICK-TO-EDIT MHZ READOUT (same pattern as file rename in files.html) ── */
@@ -835,7 +890,7 @@
       wrap.innerHTML = `<input type="text" id="mhz-edit-input" class="readout-input" inputmode="numeric"
                                maxlength="4" autocomplete="off" spellcheck="false" value="${value}">`;
       const input = $('mhz-edit-input');
-      const fit = () => { input.style.width = `${Math.max(input.value.length, 1) + 0.5}ch`; };
+      const fit = () => { input.style.width = `${Math.max(input.value.length, 1) + 1.5}ch`; };
       fit();
 
       let finished = false;
@@ -1114,6 +1169,10 @@
         if (btn) { e.preventDefault(); btn.click(); }
       }
     });
+    // Holding an arrow key repeats keydown; send the final value on release.
+    document.addEventListener('keyup', e => {
+      if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') flushSpeedSend();
+    });
 
     /* ── QUICK SPEED PRESETS (percent of the base clock) ── */
     function renderPresets() {
@@ -1133,8 +1192,9 @@
     $('speed-slider').addEventListener('input', () => {
       setTargetMhz(parseInt($('speed-slider').value, 10), true, false);
     });
-    $('speed-slider').addEventListener('change', () => {
+    $('speed-slider').addEventListener('change', () => {   // released
       setTargetMhz(parseInt($('speed-slider').value, 10), true, false);
+      flushSpeedSend();
     });
 
     function renderCalibWarning(verified) {
@@ -1164,7 +1224,7 @@
       const fam = cpuFamilies.find(f => f.id === id);
       $('cpu-select-label').textContent = fam ? fam.name : '—';
       renderCpuMenu();
-      sendConfig();
+      stageConfig();
       loadPresets();
     }
 
@@ -1213,45 +1273,88 @@
           renderCpuMenu();
 
           $('base-mhz').value = data.baseMhz;
-          baseMhzCache = data.baseMhz;
+          baseMhzCache  = data.baseMhz;
+          deviceFamily  = data.family;     // page load: shows what the device runs,
+          deviceBaseMhz = data.baseMhz;    // so APPLY starts inactive
 
           applyThrottleState(data, true);
         })
         .catch(() => {});
     }
 
-    // Base clock (and/or CPU family) changed. The firmware's
-    // /api/throttle/config endpoint only stores family/baseMhz — it
-    // re-arms the modulator at the *existing* speedPercent, it does not
-    // recompute one. That's fine when the UI's source of truth is percent,
-    // but ours is now an absolute MHz target, so if the base clock moves
-    // we still want the same physical MHz output (clamped down only if
-    // it no longer fits under the new, lower base clock) — which means
-    // recomputing speedPercent for the new base and pushing it too.
-    function sendConfig() {
-      const family      = selectedFamily;
-      const newBaseMhz  = parseInt($('base-mhz').value, 10);
-      if (family === null || !Number.isFinite(newBaseMhz) || newBaseMhz <= 0) return;
+    /* ── APPLY: CPU FAMILY + BASE CLOCK ──────────────────────────────────
+       Changing the family or the base clock only changes the page. While
+       such a change is pending, the slider, % buttons, presets, keys and the
+       typed MHz move the target on screen only (against the pending base
+       clock). APPLY sends family, base clock and target in one request, so
+       the device never runs the old speed on the new configuration.
+       Afterwards the slider is live again until the next family / base
+       clock change. */
+    function pageBaseMhz() {
+      const v = parseInt($('base-mhz').value, 10);
+      return Number.isFinite(v) && v >= 1 && v <= 9999 ? v : baseMhzCache;
+    }
 
-      baseMhzCache = newBaseMhz;
-      targetMhz    = clampMhz(targetMhz); // no-op unless the new base clock is now below the old target
-      delivered    = null;                // re-reported once the speed is re-sent below
-      updateReadoutDisplay();
+    function configPending() {
+      if (deviceFamily === null || deviceBaseMhz === null) return false;
+      return selectedFamily !== deviceFamily || pageBaseMhz() !== deviceBaseMhz;
+    }
 
-      const fam = cpuFamilies.find(f => f.id === family);
+    function updateApplyButton() {
+      const pending = configPending();
+      const btn = $('config-apply');
+      btn.disabled = !pending;
+      btn.title = pending ? 'Send the CPU family, base clock and speed to the HAWK 370' : 'Nothing to apply';
+    }
+
+    // Takes the base clock field's value into the page state (an empty or
+    // invalid field falls back to the last good value).
+    function commitBaseField() {
+      const v = pageBaseMhz();
+      $('base-mhz').value = v;
+      if (v !== baseMhzCache) {
+        baseMhzCache = v;
+        targetMhz = clampMhz(targetMhz);   // only lowers it if it no longer fits
+      }
+    }
+
+    // The family or the base clock changed on the page: nothing is sent.
+    function stageConfig() {
+      commitBaseField();
+      cancelSpeedSend();                   // a debounced slider value must not go out now
+      const fam = cpuFamilies.find(f => f.id === selectedFamily);
       if (fam) renderCalibWarning(fam.verified);
+      delivered = null;
       localChangeAt = Date.now();
+      updateApplyButton();
+      updateReadoutDisplay();
+      // Changed back to what the device runs: send a target moved meanwhile.
+      if (!configPending()) sendSpeedMhz(true);
+    }
 
+    function applyConfig() {
+      commitBaseField();
+      if (!configPending()) { updateApplyButton(); return; }
+      cancelSpeedSend();
+      const family  = selectedFamily;
+      const baseMhz = baseMhzCache;
+      const speedPercent = Math.min(100, Math.max(0, targetMhz / baseMhz * 100));
+      $('config-apply').disabled = true;
+      localChangeAt = Date.now();
+      ++speedSeq;                          // older speed replies must not repaint
       inFlight++;
       fetch('/api/throttle/config', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ family, baseMhz: newBaseMhz })
+        body: JSON.stringify({ family, baseMhz, speedPercent })
       })
-        .then(() => sendSpeedMhz(true)) // re-sync speedPercent so the absolute MHz target holds under the new base
-        .catch(() => showToast('Failed to save CPU configuration', 'fail'))
-        .finally(() => { inFlight--; });
+        .then(r => { if (!r.ok) throw new Error(r.status); return r.json(); })
+        .then(data => applyThrottleState(data, false))
+        .catch(() => showToast('Failed to apply the CPU configuration', 'fail'))
+        .finally(() => { inFlight--; updateApplyButton(); });
     }
+
+    $('config-apply').addEventListener('click', applyConfig);
 
     /* ── MHZ STEPPER BUTTONS (base clock field) ── */
     function stepBaseMhz(delta) {
@@ -1262,15 +1365,20 @@
       if (!Number.isFinite(val)) val = 0;
       val = Math.min(max, Math.max(min, val + delta));
       input.value = val;
-      sendConfig();
+      stageConfig();
     }
 
     $('mhz-up').addEventListener('click', () => stepBaseMhz(1));
     $('mhz-down').addEventListener('click', () => stepBaseMhz(-1));
 
-    $('base-mhz').addEventListener('change', sendConfig);
+    $('base-mhz').addEventListener('input', updateApplyButton);   // while typing
+    $('base-mhz').addEventListener('change', stageConfig);         // Enter / leaving the field
     $('base-mhz').addEventListener('keydown', e => {
-      if (e.key === 'Enter') { e.preventDefault(); $('base-mhz').blur(); }
+      if (e.key !== 'Enter') return;
+      e.preventDefault();
+      stageConfig();
+      if (configPending()) applyConfig();   // Enter presses APPLY
+      $('base-mhz').blur();
     });
 
     /* ── POWER RAILS: SSE VOLTAGE STREAM + SPARKLINES ───────────────────── */

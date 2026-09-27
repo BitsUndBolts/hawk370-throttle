@@ -394,12 +394,14 @@ ThrottleState throttleRequestSpeed(float speedPercent) {
   return s;
 }
 
-ThrottleState throttleRequestConfig(uint8_t family, uint32_t baseMhz) {
+ThrottleState throttleRequestConfig(uint8_t family, uint32_t baseMhz, float speedPercent) {
   if (family >= FAMILY_COUNT) family = FAMILY_MENDOCINO;
   if (baseMhz == 0) baseMhz = DEFAULT_BASE_MHZ;
+  const bool newSpeed = (speedPercent >= 0.0f);          // false for NaN and "keep"
+  if (newSpeed && speedPercent > 100.0f) speedPercent = 100.0f;
 
   portENTER_CRITICAL(&stateMux);
-  const float requested = target.requestedPercent;
+  const float requested = newSpeed ? speedPercent : target.requestedPercent;
   portEXIT_CRITICAL(&stateMux);
   const float delivered = previewDelivered(requested, family);
 
@@ -407,9 +409,11 @@ ThrottleState throttleRequestConfig(uint8_t family, uint32_t baseMhz) {
   const bool familyChanged = (target.family != family);
   target.family  = family;
   target.baseMhz = baseMhz;
+  target.requestedPercent = requested;
   target.deliveredPercent = delivered;
+  target.paused = (delivered == 0.0f);
   savePending  = true;
-  applyPending = applyPending || familyChanged;   // timing may differ per family
+  applyPending = applyPending || familyChanged || newSpeed;   // timing may differ per family
   target.rev = ++stateVersion;
   ThrottleState s = target;
   portEXIT_CRITICAL(&stateMux);

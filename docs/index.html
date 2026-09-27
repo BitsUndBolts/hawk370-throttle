@@ -1,0 +1,535 @@
+<!DOCTYPE html>
+<!--
+  Copyright (c) 2026 Alexander Fuchs / Bits Und Bolts
+  Licensed under the MIT License.
+
+  HAWK 370 web installer - flashes an ESP32-C3 SuperMini straight from the
+  browser (Web Serial + esp-web-tools). Served by GitHub Pages from /docs.
+  Release files come from GitHub Releases through the Cloudflare Worker in
+  docs/worker (GitHub's download CDN sends no CORS header).
+-->
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>HAWK 370 · Installer</title>
+  <link rel="icon" href="favicon.ico">
+  <style>
+    @font-face {
+      font-family: 'VT323';
+      src: url('VT323_Regular.woff2') format('woff2');
+      font-weight: 400; font-style: normal; font-display: swap;
+    }
+    @font-face {
+      font-family: 'IBM Plex Mono';
+      src: url('ibm-plex-mono-v20-latin-regular.woff2') format('woff2');
+      font-weight: 400; font-style: normal; font-display: swap;
+    }
+
+    /* Same palette as the dashboard (data/hawk370.css) */
+    :root {
+      --bg:           #0c0f0b;
+      --panel:        #12160f;
+      --panel-2:      #171c14;
+      --border:       #2b2f27;
+      --border-bright:#46503c;
+      --accent:       #ffb000;
+      --accent-dim:   rgba(255, 176, 0, 0.10);
+      --accent-glow:  rgba(255, 176, 0, 0.24);
+      --green:        #4fbf67;
+      --red:          #ff5c5c;
+      --red-dim:      rgba(255, 92, 92, 0.10);
+      --text:         #d9ddc8;
+      --text-2:       #8a9180;
+      --text-3:       #565c4e;
+      --mono: 'IBM Plex Mono', 'Consolas', ui-monospace, SFMono-Regular, Menlo,
+              Monaco, 'Liberation Mono', 'Courier New', monospace;
+      --font-display: 'VT323', var(--mono);
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html { font-size: clamp(13px, 1.9vw, 18px); }
+
+    body {
+      font-family: var(--mono);
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100dvh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 1.2em;
+      background-image:
+        linear-gradient(rgba(255, 176, 0, 0.02) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255, 176, 0, 0.02) 1px, transparent 1px);
+      background-size: 40px 40px;
+    }
+
+    /* ── CARD ── */
+    .card {
+      width: 100%;
+      max-width: 38em;
+      background: var(--panel);
+      border: 1px solid var(--border-bright);
+    }
+
+    .card-header {
+      background: var(--panel-2);
+      border-bottom: 1px solid var(--border-bright);
+      padding: 0.75em 1.2em;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1em;
+    }
+    .header-badge { display: flex; align-items: center; gap: 0.8em; }
+    .header-logo { height: 2.2em; width: auto; object-fit: contain; }
+    .header-title {
+      font-size: 0.85em;
+      font-weight: 600;
+      color: var(--text-2);
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+    }
+    .version-pill {
+      font-family: var(--font-display);
+      font-size: 1.3em;
+      color: var(--accent);
+      background: var(--accent-dim);
+      border: 1px solid var(--accent-glow);
+      padding: 0 0.5em;
+      letter-spacing: 0.04em;
+      white-space: nowrap;
+    }
+
+    .card-body { padding: 1.2em; display: flex; flex-direction: column; gap: 1.1em; }
+
+    /* ── NOTICES ── */
+    .notice {
+      display: flex;
+      align-items: flex-start;
+      gap: 0.6em;
+      padding: 0.75em 0.9em;
+      background: var(--accent-dim);
+      border: 1px solid var(--accent-glow);
+      font-size: 0.85em;
+      line-height: 1.55;
+      color: var(--accent);
+    }
+    .notice svg { width: 1.1em; height: 1.1em; flex-shrink: 0; margin-top: 0.15em; }
+    .compat-notice { display: none; }
+
+    .section-label {
+      font-size: 0.78em;
+      font-weight: 600;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      color: var(--text-3);
+      margin-bottom: 0.6em;
+    }
+
+    /* ── STEPS ── */
+    .steps { display: flex; flex-direction: column; }
+    .step-row {
+      display: flex;
+      gap: 0.8em;
+      align-items: flex-start;
+      padding: 0.65em 0;
+      border-bottom: 1px solid var(--border);
+    }
+    .step-row:last-child { border-bottom: none; padding-bottom: 0; }
+    .step-num {
+      font-family: var(--font-display);
+      font-size: 1.15em;
+      color: var(--accent);
+      background: var(--accent-dim);
+      border: 1px solid var(--accent-glow);
+      width: 1.5em;
+      height: 1.5em;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+    .step-text { font-size: 0.9em; color: var(--text-2); line-height: 1.55; padding-top: 0.1em; }
+    .step-text strong { color: var(--text); font-weight: 600; }
+    .step-text a { color: var(--accent); text-decoration: none; }
+    .step-text a:hover { text-decoration: underline; }
+    .step-text code, .choice code {
+      background: var(--panel-2);
+      border: 1px solid var(--border-bright);
+      padding: 0.05em 0.4em;
+      color: var(--text);
+      font-size: 0.95em;
+    }
+
+    /* ── ERASE OR KEEP ── */
+    .choices { display: grid; grid-template-columns: 1fr 1fr; gap: 0.6em; margin-top: 0.7em; }
+    .choice {
+      border: 1px solid var(--border-bright);
+      background: var(--panel-2);
+      padding: 0.65em 0.75em;
+      font-size: 0.82em;
+      line-height: 1.5;
+      color: var(--text-2);
+    }
+    .choice-title { font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; margin-bottom: 0.35em; display: flex; align-items: center; gap: 0.45em; }
+    .choice-title .box {
+      width: 0.95em; height: 0.95em; border: 1px solid currentColor; display: inline-flex;
+      align-items: center; justify-content: center; font-size: 0.85em; line-height: 1;
+    }
+    .choice.keep  .choice-title { color: var(--green); }
+    .choice.erase .choice-title { color: var(--red); }
+
+    .divider { height: 1px; background: var(--border); }
+
+    /* ── VERSION + BUTTON ── */
+    .field-row { display: flex; align-items: center; gap: 0.75em; margin-bottom: 0.8em; }
+    .field-label {
+      font-size: 0.78em;
+      font-weight: 600;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--text-3);
+      flex-shrink: 0;
+      width: 5em;
+    }
+    .version-select {
+      flex: 1;
+      min-width: 0;
+      background: var(--bg);
+      border: 1px solid var(--border-bright);
+      padding: 0.5em 2em 0.5em 0.75em;
+      font-family: var(--mono);
+      font-size: 0.92em;
+      color: var(--text);
+      outline: none;
+      cursor: pointer;
+      appearance: none;
+      -webkit-appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6' fill='none'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%238a9180' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 0.75em center;
+    }
+    .version-select:focus { border-color: var(--accent); }
+
+    .flash-btn {
+      width: 100%;
+      padding: 0.85em;
+      font-family: var(--mono);
+      font-size: 1em;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      background: var(--accent);
+      color: var(--bg);
+      border: none;
+      cursor: pointer;
+      transition: opacity 0.15s, box-shadow 0.15s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.6em;
+    }
+    .flash-btn:hover:not(:disabled) { box-shadow: 0 0 2em var(--accent-glow); }
+    .flash-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+    .flash-btn svg { width: 1.1em; height: 1.1em; flex-shrink: 0; }
+    esp-web-install-button { display: block; }
+
+    .unsupported-box {
+      padding: 0.75em 0.9em;
+      background: var(--red-dim);
+      border: 1px solid rgba(255, 92, 92, 0.3);
+      font-size: 0.85em;
+      color: var(--red);
+      line-height: 1.55;
+      text-align: center;
+    }
+
+    .ota-note { font-size: 0.8em; color: var(--text-3); line-height: 1.55; }
+    .ota-note strong { color: var(--text-2); font-weight: 600; }
+    .ota-note code { color: var(--text-2); }
+
+    /* ── FOOTER ── */
+    .card-footer {
+      background: var(--panel-2);
+      border-top: 1px solid var(--border);
+      padding: 0.6em 1.2em;
+      font-size: 0.78em;
+      color: var(--text-3);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.6em;
+    }
+    .card-footer a, .card-footer a:visited { color: var(--accent); text-decoration: none; }
+    .card-footer a:hover { text-decoration: underline; }
+    .footer-links { display: flex; gap: 1em; }
+    .footer-chip { display: flex; align-items: center; gap: 0.5em; }
+    .chip-dot {
+      --dot-color: var(--accent);
+      width: 0.55em; height: 0.55em;
+      border-radius: 50%;
+      background: var(--dot-color);
+      box-shadow: 0 0 6px var(--dot-color);
+      flex-shrink: 0;
+      transition: background 0.3s, box-shadow 0.3s;
+    }
+    .chip-dot.connected { --dot-color: var(--green); }
+
+    @media (max-width: 520px) {
+      .choices { grid-template-columns: 1fr; }
+      .card-footer { flex-direction: column; align-items: flex-start; }
+    }
+  </style>
+</head>
+<body>
+
+  <main class="card">
+
+    <div class="card-header">
+      <div class="header-badge">
+        <img src="hawk370.webp" alt="HAWK 370" class="header-logo" onerror="this.style.display='none'">
+        <span class="header-title">Firmware Installer</span>
+      </div>
+      <span class="version-pill" id="header-version">v—</span>
+    </div>
+
+    <div class="card-body">
+
+      <div class="notice compat-notice" id="compat-notice">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+        </svg>
+        <p>This browser has no Web Serial. Use <strong>Chrome, Edge</strong> or another Chromium browser (Firefox from version 151). Safari is not supported.</p>
+      </div>
+
+      <div>
+        <div class="section-label">Before you begin</div>
+        <div class="steps">
+          <div class="step-row">
+            <div class="step-num">1</div>
+            <div class="step-text">Connect the <strong>ESP32-C3 SuperMini</strong> to this computer with a USB <strong>data</strong> cable.</div>
+          </div>
+          <div class="step-row">
+            <div class="step-num">2</div>
+            <div class="step-text">Pick a version below, click <strong>Install Firmware</strong> and select the serial port when the browser asks.</div>
+          </div>
+          <div class="step-row">
+            <div class="step-num">3</div>
+            <div class="step-text">
+              The installer then asks whether to <strong>erase the device</strong>:
+              <div class="choices">
+                <div class="choice keep">
+                  <div class="choice-title"><span class="box"></span>Leave unticked</div>
+                  <strong>Flash and keep settings.</strong> For updates: Wi-Fi, CPU family, base clock and your presets stay. The web pages are replaced.
+                </div>
+                <div class="choice erase">
+                  <div class="choice-title"><span class="box">✓</span>Tick "Erase device"</div>
+                  <strong>Flash and wipe all data.</strong> For the first install, or a board that ran other firmware. Export your presets first.
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="step-row">
+            <div class="step-num">4</div>
+            <div class="step-text">
+              After a fresh install, join the <strong>HAWK370-Setup</strong> Wi-Fi hotspot (password <code>hawk370setup</code>) and open
+              <a href="http://hawk370.local">hawk370.local</a> (or <code>192.168.8.1</code>) to run the setup wizard.
+              After an update the dashboard is back at its usual address.
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="divider"></div>
+
+      <div>
+        <div class="section-label">Flash firmware</div>
+        <div class="field-row">
+          <span class="field-label">Version</span>
+          <select class="version-select" id="version-select"></select>
+        </div>
+
+        <!-- The slot's click listener starts the install flow, so the button
+             only has to live inside esp-web-install-button. -->
+        <esp-web-install-button id="ewt-btn">
+          <button slot="activate" class="flash-btn" id="flash-btn">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
+            </svg>
+            Install Firmware
+          </button>
+          <span slot="unsupported">
+            <div class="unsupported-box">
+              Your browser does not support Web Serial.<br>
+              Please use Chrome, Edge, or another Chromium-based browser.
+            </div>
+          </span>
+        </esp-web-install-button>
+      </div>
+
+      <p class="ota-note">
+        <strong>No USB at hand?</strong> A running HAWK 370 can also update over Wi-Fi: download
+        <code>HAWK370_firmware.bin</code> (and <code>HAWK370_littlefs.bin</code> for the web pages) from the
+        <a href="https://github.com/BitsUndBolts/hawk370-throttle/releases" target="_blank" rel="noopener" style="color:var(--accent)">release</a>
+        and drop them on the dashboard's Files page. That always keeps your settings and presets.
+      </p>
+
+    </div>
+
+    <div class="card-footer">
+      <div class="footer-chip">
+        <span class="chip-dot" id="chip-dot"></span>
+        <span>ESP32-C3 SuperMini</span>
+      </div>
+      <div class="footer-links">
+        <a href="https://www.youtube.com/@bitsundbolts" target="_blank" rel="noopener">YouTube ↗</a>
+        <a href="https://github.com/BitsUndBolts/hawk370-throttle" target="_blank" rel="noopener">GitHub ↗</a>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- esp-web-tools, loaded as a module so the custom element registers -->
+  <script type="module" src="https://unpkg.com/esp-web-tools@10/dist/web/install-button.js?module"></script>
+
+  <script>
+    // ── Configuration ────────────────────────────────────────────────────────
+    const REPO_OWNER = "bitsundbolts";
+    const REPO_NAME  = "hawk370-throttle";
+
+    // Cloudflare Worker (docs/worker) that relays the release files with the
+    // CORS header GitHub's download CDN does not send.
+    const PROXY_BASE = `https://${REPO_NAME}-releases.${REPO_OWNER}.workers.dev`;
+
+    // Release files (made by Build_Release.bat) and where they go in flash
+    // (partitions.csv). Written one by one, not as one merged image, so an
+    // install without "Erase device" leaves the NVS settings partition
+    // (0x9000-0xDFFF: Wi-Fi, CPU family, base clock, presets) untouched.
+    const PARTS = [
+      { file: 'HAWK370_bootloader.bin', offset: 0x0 },
+      { file: 'HAWK370_partitions.bin', offset: 0x8000 },
+      { file: 'boot_app0.bin',          offset: 0xE000 },    // boots app0 even after OTA ran from app1
+      { file: 'HAWK370_firmware.bin',   offset: 0x10000 },
+      { file: 'HAWK370_littlefs.bin',   offset: 0x290000 },  // web pages (LittleFS)
+    ];
+
+    const versionSelect = document.getElementById('version-select');
+    const ewtBtn        = document.getElementById('ewt-btn');
+    const headerVersion = document.getElementById('header-version');
+    const flashBtn      = document.getElementById('flash-btn');
+
+    let VERSIONS = [];
+    let currentBlobUrl = null;
+
+    // api.github.com sends Access-Control-Allow-Origin: *, so the release
+    // list needs no proxy; only the binary downloads go through the worker.
+    async function fetchVersions() {
+      const res = await fetch(
+        `https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/releases`,
+        { headers: { Accept: 'application/vnd.github+json' } }
+      );
+      if (!res.ok) throw new Error(`GitHub API error: ${res.status}`);
+      const releases = await res.json();
+
+      // Newest first, as GitHub returns them. Releases without the full set
+      // of files are skipped.
+      return releases
+        .filter(r => !r.draft)
+        .filter(r => PARTS.every(p => r.assets.some(a => a.name === p.file)))
+        .map((release, i) => {
+          const tag = release.tag_name;              // e.g. "v0.6"
+          const pre = release.prerelease ? ' (pre-release)' : '';
+          return {
+            label: (i === 0 ? `Latest (${tag})` : tag) + pre,
+            manifest: {
+              name: 'HAWK 370 Throttle',
+              version: tag.replace(/^v/, ''),
+              // Ask "Erase device?" instead of always erasing: unticked keeps
+              // the settings, ticked wipes the whole chip first.
+              new_install_prompt_erase: true,
+              // The firmware has no Improv Serial; don't wait for it.
+              new_install_improv_wait_time: 0,
+              builds: [{
+                chipFamily: 'ESP32-C3',
+                parts: PARTS.map(p => ({
+                  path: `${PROXY_BASE}/${encodeURIComponent(tag)}/${encodeURIComponent(p.file)}`,
+                  offset: p.offset
+                }))
+              }]
+            }
+          };
+        });
+    }
+
+    function buildVersionSelect() {
+      versionSelect.innerHTML = '';
+      VERSIONS.forEach((v, i) => {
+        const opt = document.createElement('option');
+        opt.value = i;
+        opt.textContent = v.label;
+        versionSelect.appendChild(opt);
+      });
+    }
+
+    function applyVersion(idx) {
+      const v = VERSIONS[idx];
+      if (!v) return;
+      if (currentBlobUrl) URL.revokeObjectURL(currentBlobUrl);
+      const blob = new Blob([JSON.stringify(v.manifest)], { type: 'application/json' });
+      currentBlobUrl = URL.createObjectURL(blob);
+      ewtBtn.setAttribute('manifest', currentBlobUrl);
+      headerVersion.textContent = 'v' + v.manifest.version;
+    }
+
+    async function init() {
+      versionSelect.disabled = true;
+      flashBtn.disabled = true;
+      versionSelect.innerHTML = '<option>Loading versions…</option>';
+      try {
+        VERSIONS = await fetchVersions();
+        if (VERSIONS.length === 0) {
+          versionSelect.innerHTML = '<option>No releases found</option>';
+          return;
+        }
+        buildVersionSelect();
+        applyVersion(0);
+        versionSelect.disabled = false;
+        flashBtn.disabled = false;
+      } catch (err) {
+        console.error('Failed to load firmware versions:', err);
+        versionSelect.innerHTML = '<option>Failed to load versions</option>';
+      }
+    }
+
+    versionSelect.addEventListener('change', () => applyVersion(Number(versionSelect.value)));
+    init();
+
+    // ── Connection indicator ────────────────────────────────────────────────
+    // Web Serial only reports ports this page was already allowed to use, so
+    // the dot turns green after the first "Install Firmware" + port pick and
+    // then follows plug / unplug, also on later visits.
+    const chipDot = document.getElementById('chip-dot');
+    async function refreshConnectionIndicator() {
+      try {
+        const ports = await navigator.serial.getPorts();
+        chipDot.classList.toggle('connected', ports.some(p => p.connected));
+      } catch {
+        chipDot.classList.remove('connected');
+      }
+    }
+    if ('serial' in navigator) {
+      navigator.serial.addEventListener('connect', refreshConnectionIndicator);
+      navigator.serial.addEventListener('disconnect', refreshConnectionIndicator);
+      refreshConnectionIndicator();
+      setInterval(refreshConnectionIndicator, 1000);
+    } else {
+      document.getElementById('compat-notice').style.display = 'flex';
+    }
+  </script>
+
+</body>
+</html>

@@ -1,12 +1,11 @@
 /*
  * Host-side test for the preset store (hawk_presets.cpp) using the shims in
- * test/shims (String, Preferences/NVS, LittleFS). Run: sh test/run_tests.sh
+ * test/shims (String, Preferences/NVS). Run: sh test/run_tests.sh
  */
 #include "ArduinoJsonShim.h"
 #include "../hawk_presets.h"
 #include "../hawk_throttle.h"
 #include "Preferences.h"
-#include "LittleFS.h"
 
 // The real table lives in hawk_throttle.cpp (hardware code); the test only needs names.
 const CpuFamilyInfo CPU_FAMILIES[FAMILY_COUNT] = {
@@ -18,7 +17,7 @@ const CpuFamilyInfo CPU_FAMILIES[FAMILY_COUNT] = {
   { "VIA Nehemiah", "via-nehemiah", hawk::DEFAULT_TIMING, false },
 };
 
-SerialShim Serial; FsStore fsStore; LittleFSShim LittleFS; NvsStore nvsStore;
+SerialShim Serial; NvsStore nvsStore;
 static int fails = 0;
 #define CHECK(c) do { if (!(c)) { fails++; printf("FAIL line %d: %s\n", __LINE__, #c); } } while (0)
 
@@ -30,16 +29,17 @@ static std::vector<std::string> names(uint8_t f) {
 }
 
 int main() {
-  // A v0.4 unit had presets in LittleFS: they must move into NVS once.
-  fsStore.files["/presets/tualatin.json"] = R"([{"n":"386DX-40","m":25,"r":1400},{"n":"286-12","m":8}])";
-  fsStore.files["/presets/mendocino.json"] = R"([{"n":"Doom","m":60,"r":333}])";
-  presetsBegin(true);
+  // Empty store on first boot, then a few presets in two families.
+  presetsBegin();
+  CHECK(presetsCount() == 0);
+  CHECK(presetsSave(2, "386DX-40", 25, 1400, "") == PRESET_OK);
+  CHECK(presetsSave(2, "286-12", 8, 0, "") == PRESET_OK);
+  CHECK(presetsSave(0, "Doom", 60, 333, "") == PRESET_OK);
   CHECK(names(2).size() == 2 && names(0).size() == 1);
-  CHECK(fsStore.files.empty());                       // LittleFS files removed after the move
   CHECK(presetsCount() == 3);
 
   // Survives a "reboot": reload from the NVS record only.
-  presetsBegin(false);
+  presetsBegin();
   auto n = names(2);
   CHECK(n.size() == 2 && n[0] == "286-12=8" && n[1] == "386DX-40=25");
 
@@ -83,7 +83,7 @@ int main() {
   CHECK(presetsSave(1, "renamed", 5, 0, "Preset number 5") == PRESET_OK);   // edits still work when full
 
   // worst case record size: 100 presets with 32-byte names
-  presetsBegin(false);
+  presetsBegin();
   printf("record with 100 presets: %zu bytes\n", nvsStore.blobs["presets/v1"].size());
 
   // a failed NVS write changes nothing
@@ -95,7 +95,7 @@ int main() {
 
   // a corrupt record starts empty instead of crashing
   nvsStore.blobs["presets/v1"] = { 'X', 'Y', 1, 5 };
-  presetsBegin(false);
+  presetsBegin();
   CHECK(presetsCount() == 0);
   CHECK(presetsRevision() > 0);
 
