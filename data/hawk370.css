@@ -80,6 +80,7 @@ html {
   font-size: clamp(7px, 1.8vw, 22px);
 }
 
+
 body {
   font-family: var(--sans);
   background: var(--bg);
@@ -715,4 +716,25 @@ body {
 
 .btn-confirm:hover {
   opacity: 0.88;
+}
+
+/* ── PHONE (portrait) ── kept at the end of this file so it overrides the
+   rules above.
+   Phones in portrait: a fixed, readable base size instead of shrinking the
+   whole desktop layout with the screen width. Each page reflows its own
+   layout in its "PHONE" media block. */
+@media (max-width: 640px) {
+  html { font-size: 14px; -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+  .card { border-radius: 0; border-left: none; border-right: none; }
+  .card-header { padding: 0.8em 1em; gap: 0.8em; }
+  .header-logo { height: 2.1em; }
+  .header-title { font-size: 1em; white-space: nowrap; }
+  .section-label { padding: 1.3em 1.1em 0.6em; }
+  .card-footer { padding: 1em 1.1em 1.4em; }
+  .toast { white-space: normal; width: max-content; max-width: calc(100vw - 2em); text-align: center; bottom: 1.2em; }
+  .modal-overlay { padding: 1em; }
+  .modal { width: 100%; max-height: calc(100dvh - 2em); overflow-y: auto; }
+  .modal-body { padding: 1.3em 1.2em; font-size: 1.05em; }
+  .modal-actions { flex-wrap: wrap; }
+  .btn-cancel, .btn-confirm { padding: 0.9em 1em; }
 }

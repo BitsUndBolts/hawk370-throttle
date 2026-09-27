@@ -96,7 +96,7 @@ echo Release files in %CD%\%OUT%:
 for %%F in ("%OUT%\*.bin") do echo   %%~nxF  %%~zF bytes
 echo.
 echo Web installer: attach all five files to a GitHub Release.
-echo OTA update:    drop HAWK370_firmware.bin, then HAWK370_littlefs.bin, on the Files page.
+echo OTA update:    drop HAWK370_littlefs.bin and HAWK370_firmware.bin together on the Files page.
 
 :end
 echo.

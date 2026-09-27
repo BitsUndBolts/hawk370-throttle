@@ -313,6 +313,28 @@
 
     /* footer gap override */
     .footer-kv { gap: 1em 1.6em; }
+
+    /* ── PHONE (portrait) ── base size 14px from hawk370.css. The file table
+       gets fixed column widths so long names are shortened ("…") instead of
+       pushing the size and the buttons off the screen. */
+    @media (max-width: 640px) {
+      .upload-section { padding: 0 1em 1em; }
+      .dropzone { padding: 1.8em 1.1em; }
+      .drop-label { font-size: 1.15em; }
+      .drop-hint { font-size: 0.9em; }
+      .file-table-section { padding: 0 1em 1em; }
+      .file-table { table-layout: fixed; }
+      .file-table th, .file-table td { padding: 0.7em 0.6em; }
+      .file-table th { font-size: 0.75em; letter-spacing: 0.1em; }
+      .file-table th.col-size { width: 5em; }
+      .file-table th.col-action { width: 7.6em; }
+      .file-table td.col-action { padding: 0.5em 0.4em; }
+      .file-size { font-size: 0.9em; white-space: nowrap; }
+      .fn-name { font-size: 1em; }
+      .btn-icon { padding: 0.55em; }
+      .q-remove { padding: 0.5em; }
+      .fn-edit { font-size: 16px; }   /* iOS zooms into any input smaller than 16px */
+    }
   </style>
 </head>
 <body>
@@ -354,6 +376,7 @@
         </div>
         <div class="drop-label">Drop files here or click to browse</div>
         <div class="drop-hint">.bin → firmware OTA &nbsp;·&nbsp; *littlefs*.bin → storage image &nbsp;·&nbsp; any other file → Storage</div>
+        <div class="drop-hint drop-hint-full">Full update: drop <strong>HAWK370_littlefs.bin</strong> and <strong>HAWK370_firmware.bin</strong> together.</div>
       </div>
 
       <!-- File queue -->
@@ -365,7 +388,7 @@
           <circle cx="12" cy="12" r="10"/>
           <line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
         </svg>
-        <span>Firmware file detected. It will be flashed last. The device will reboot after a successful flash.</span>
+        <span>Web pages (storage image) are written first and the firmware last. The device restarts once, when everything is done.</span>
       </div>
 
       <!-- Space warning -->
@@ -483,6 +506,8 @@
     </div>
   </div>
 
+  <div class="toast" id="toast"></div>
+
   <script>
     /* ── CONFIG ─────────────────────────────────────────────────────────── */
     const FIRMWARE_ENDPOINT = '/ota/firmware';
@@ -546,10 +571,14 @@
         if (queue.some(e => e.file.name === file.name)) continue;
         const why = rejectReason(file);
         if (why) { showToast(why, 'fail'); continue; }
-        // The device reboots after flashing, so only one image per run.
-        if (isFirmwareFile(file) && queue.some(e => e.isFirmware && e.status === 'pending')) {
-          showToast('Only one .bin image per upload run', 'fail');
-          continue;
+        // At most one storage image and one firmware per run: the image goes
+        // first, the firmware last, and the device restarts once at the end.
+        if (isFirmwareFile(file)) {
+          const image = isStorageImage(file);
+          if (queue.some(e => e.status === 'pending' && e.isFirmware && e.isImage === image)) {
+            showToast(image ? 'Only one storage image per upload run' : 'Only one firmware file per upload run', 'fail');
+            continue;
+          }
         }
         queue.push({ id: nextId++, file, isFirmware: isFirmwareFile(file),
                      isImage: isStorageImage(file), status: 'pending', error: '' });
@@ -652,11 +681,13 @@
       } else if (!queue.length) {
         uploadBtnLbl.textContent = 'Select files to upload';
       } else {
-        const pendingCount = queue.filter(e => e.status === 'pending').length;
-        const label = pendingCount === 1
-          ? (hasFirmware && pendingCount === 1 ? 'Flash Firmware' : 'Upload 1 File')
-          : `Upload ${pendingCount} Files${hasFirmware ? ' + Flash Firmware' : ''}`;
-        uploadBtnLbl.textContent = label;
+        const pending = queue.filter(e => e.status === 'pending');
+        const files   = pending.filter(e => !e.isFirmware).length;
+        const parts   = [];
+        if (pending.some(e => e.isImage)) parts.push('Flash Web Pages');
+        if (files) parts.push(`Upload ${files} File${files !== 1 ? 's' : ''}`);
+        if (pending.some(e => e.isFirmware && !e.isImage)) parts.push('Flash Firmware');
+        uploadBtnLbl.textContent = parts.join(' + ') || 'Select files to upload';
       }
     }
 
@@ -675,10 +706,13 @@
       statusMsg.className = 'notice';
       rebootRow.classList.remove('visible');
 
-      // Sort: non-firmware first, firmware last
+      // Order: storage image first, then single files, firmware last.
+      const rank = e => e.isImage ? 0 : e.isFirmware ? 2 : 1;
       const pending = queue
         .filter(e => e.status === 'pending')
-        .sort((a, b) => a.isFirmware - b.isFirmware);
+        .sort((a, b) => rank(a) - rank(b));
+      // Anything after the storage image needs the device to stay up.
+      const moreAfterImage = pending.length > 1;
 
       const total    = pending.length;
       let   done     = 0;
@@ -696,11 +730,13 @@
         // Mark row as uploading
         entry.status = 'uploading';
         renderQueue();
-        overallLabel.textContent = entry.isFirmware
+        overallLabel.textContent = entry.isImage
+          ? `Flashing web pages (${done + 1} / ${total})…`
+          : entry.isFirmware
           ? `Flashing firmware (${done + 1} / ${total})…`
           : `Uploading "${entry.file.name}" (${done + 1} / ${total})…`;
 
-        const ok = await uploadOne(entry);
+        const ok = await uploadOne(entry, entry.isImage && moreAfterImage);
 
         entry.status = ok ? 'done' : 'failed';
         if (!ok) hadError = true;
@@ -718,7 +754,8 @@
       isUploading = false;
       dropzone.classList.remove('locked');
 
-      const firmwareDone = queue.some(e => e.isFirmware && e.status === 'done');
+      const firmwareDone = queue.some(e => e.isFirmware && !e.isImage && e.status === 'done');
+      const imageDone    = queue.some(e => e.isImage && e.status === 'done');
 
       if (hadError) {
         overallLabel.textContent = 'Stopped due to error.';
@@ -727,12 +764,20 @@
           ? `Upload stopped: ${failed.error}`
           : 'Upload stopped. Check the failed file and try again.');
       } else if (firmwareDone) {
-        const image = queue.some(e => e.isImage && e.status === 'done');
-        overallLabel.textContent = (image ? 'Storage image' : 'Firmware') + ' flashed. Rebooting…';
-        showStatus('success', image
-          ? 'Storage image flashed — device is rebooting with the new web files…'
+        overallLabel.textContent = 'Firmware flashed. Rebooting…';
+        showStatus('success', imageDone
+          ? 'Web pages and firmware updated — device is rebooting…'
           : 'All files uploaded. Firmware flashed — device is rebooting…');
-        waitForReboot(image);
+        waitForReboot(imageDone);            // new web pages: reload this page afterwards
+      } else if (imageDone && !moreAfterImage) {
+        overallLabel.textContent = 'Storage image flashed. Rebooting…';
+        showStatus('success', 'Storage image flashed — device is rebooting with the new web files…');
+        waitForReboot(true);
+      } else if (imageDone) {
+        // Image + single files, no firmware: nothing restarts, just reload the new page.
+        overallLabel.textContent = 'Web pages updated.';
+        showStatus('success', 'Web pages updated — reloading…');
+        setTimeout(() => window.location.reload(), 1500);
       } else {
         overallLabel.textContent = `Done - ${done} file${done !== 1 ? 's' : ''} uploaded.`;
         showStatus('success', `${done} file${done !== 1 ? 's' : ''} successfully written to Storage.`);
@@ -747,9 +792,9 @@
     }
 
     /* Upload a single entry — returns true on success */
-    function uploadOne(entry) {
+    function uploadOne(entry, stayUp) {
       return new Promise((resolve) => {
-        const endpoint = entry.isImage ? FIRMWARE_ENDPOINT + '?target=fs'
+        const endpoint = entry.isImage ? FIRMWARE_ENDPOINT + '?target=fs' + (stayUp ? '&reboot=0' : '')
                        : entry.isFirmware ? FIRMWARE_ENDPOINT : FILE_ENDPOINT;
         const formData = new FormData();
 

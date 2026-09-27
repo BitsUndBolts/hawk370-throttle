@@ -74,19 +74,20 @@ The hotspot password is public on purpose. The hotspot is only for the local, on
 - **Intel‑referenced, glitch‑free timing.** In the middle of the range the pattern uses the 440BX chipset's own 244 µs period with continuous duty; outside it the short phase stays at 32 µs and the period stretches. No STPCLK# phase is ever shorter than 32 µs, even while switching speed.
 - **Live VCORE / VTT telemetry** over Server‑Sent Events with sparkline graphs. Several browsers stay in sync.
 - **Web installer, OTA updates and file manager.** Install from the browser over USB, or update over Wi‑Fi by dropping files on the Files page.
+- **Made for phones too.** On a phone in portrait the pages switch to one column with finger‑sized controls: slider, % buttons, presets, APPLY and the voltage graphs are all there.
 - **Robust Wi‑Fi.** Joining your network never blocks boot. If it is not reachable, the `HAWK370-Setup` access point (password `hawk370setup`) comes up with the dashboard while the station keeps retrying.
 - **Wi‑Fi power‑saving toggle.** Switch between low‑latency (`Max`) and power‑saving (`Eco`) modem modes on the fly.
 
 ## Screenshots
 
-| Throttle Control | Files / OTA | Setup |
-|---|---|---|
-| ![Throttle control screen](docs/screenshots/throttle-control.png) | ![Files and OTA screen](docs/screenshots/files.png) | ![Wi-Fi setup wizard](docs/screenshots/setup.png) |
+| Throttle Control | On a phone | Files / OTA | Setup |
+|---|---|---|---|
+| ![Throttle control screen](docs/screenshots/throttle-control.png) | ![Throttle control on a phone](docs/screenshots/phone.png) | ![Files and OTA screen](docs/screenshots/files.png) | ![Wi-Fi setup wizard](docs/screenshots/setup.png) |
 
 ## Using the dashboard
 
 - **CPU family and base clock.** Pick the family from the dropdown and enter the CPU's full clock in MHz (▲/▼ or type it). The **APPLY** button lights up as soon as the page differs from what the HAWK 370 runs, and stays grey otherwise. Until you press APPLY (or Enter in the base clock field), the slider, % buttons and presets only move the target on screen. APPLY sends family, base clock and speed together; afterwards the slider works live again.
-- **Speed.** Slider, the 25 / 50 / 75 / 100 % buttons beside the readout, or click the big MHz number and type a value (Enter or a click outside applies, Esc cancels). The line below shows the speed the CPU actually gets.
+- **Speed.** Slider, the 25 / 50 / 75 / 100 % buttons beside the readout (on a phone: under the slider), or click / tap the big MHz number and type a value (Enter or a click outside applies, Esc cancels). The line below shows the speed the CPU actually gets.
 - **My presets.** Open the list, search, click a preset to apply it. "+ Save current" stores the current speed for the selected family; ✎ edits, renames or deletes. "Export all" / "Import…" move presets between devices.
 - **Keys.** ← / → ±1 MHz, Shift ±10 MHz, 1–4 for the % buttons.
 - **Power‑on** is always full speed with the stored family and base clock. The HAWK 370 never throttles the CPU while it boots.
@@ -95,13 +96,14 @@ The hotspot password is public on purpose. The hotspot is only for the local, on
 
 | | Web installer (USB) | Files page (OTA over Wi‑Fi) |
 |---|---|---|
-| Firmware | ✔ | Drop `HAWK370_firmware.bin` |
-| Web pages | ✔ | Drop `HAWK370_littlefs.bin` |
+| Full update | ✔ | Drop `HAWK370_littlefs.bin` and `HAWK370_firmware.bin` together |
+| Only the firmware | ✔ | Drop `HAWK370_firmware.bin` |
+| Only the web pages | ✔ | Drop `HAWK370_littlefs.bin` |
 | Bootloader / partition table | ✔ | ✘ (never changed over OTA) |
 | Wi‑Fi, CPU family, base clock, presets | Kept, unless "Erase device" is ticked | Always kept |
 | Files you uploaded by hand | Replaced by the release's web pages | Kept with the firmware file; replaced by a `*littlefs*.bin` image |
 
-How OTA works: a firmware file is written to the *other* app slot (the ESP32 has two, 1.25 MB each), checked, and only then booted. If the upload fails, the old firmware keeps running. A `*littlefs*.bin` replaces the whole web storage. Settings and presets live in NVS, the ESP32's separate settings partition, which neither kind of upload touches.
+When both files are dropped together, the web pages are written first and the firmware last, and the HAWK 370 restarts once at the end. A new firmware is checked before it is used, so a failed upload leaves the old firmware running. Settings and presets are stored separately and are never touched by an update.
 
 The Files page refuses the installer‑only files (`HAWK370_bootloader.bin`, `HAWK370_partitions.bin`, `boot_app0.bin`, merged images) and anything larger than its partition before uploading.
 
@@ -151,10 +153,10 @@ If your Arduino data folder is not in the default place (`%LOCALAPPDATA%\Arduino
 ### 3. Flash it
 
 - **Web installer:** attach all five files to a GitHub Release (tag e.g. `v0.6`), see [`docs/worker/README.md`](docs/worker/README.md). The installer writes them one by one rather than as one merged image, which is what lets it keep the settings.
-- **OTA over Wi‑Fi:** on the dashboard's Files page, drop `HAWK370_firmware.bin`, wait for the restart, then drop `HAWK370_littlefs.bin`. Each upload restarts the HAWK 370.
+- **OTA over Wi‑Fi:** on the dashboard's Files page, drop `HAWK370_littlefs.bin` and `HAWK370_firmware.bin` together. The HAWK 370 restarts once when both are done.
 - **USB from the Arduino IDE:** *Upload* flashes the firmware. The web pages go separately, either with the [arduino-littlefs-upload](https://github.com/earlephilhower/arduino-littlefs-upload) plugin (Ctrl+Shift+P → *Upload LittleFS to Pico/ESP8266/ESP32*) or, once the firmware runs, by dropping `HAWK370_littlefs.bin` on the Files page.
 
-**Why two files?** The ESP32 keeps the firmware and the web pages in separate areas, and each upload replaces one of them. The `ESP32_C3_SuperMini.ino.merged.bin` from *Export Compiled Binary* is not a shortcut: it has the firmware but no web pages, and it is too big for the Files page, which refuses it.
+**Why two files?** The ESP32 keeps the firmware and the web pages in separate areas, so each has its own file; dropping both together updates everything in one go. The `ESP32_C3_SuperMini.ino.merged.bin` from *Export Compiled Binary* is not a shortcut: it has the firmware but no web pages, and it is too big for the Files page, which refuses it.
 
 After flashing, continue with the Wi‑Fi setup described in the [Quick Start](#quick-start-install-the-firmware).
 
@@ -163,7 +165,9 @@ After flashing, continue with the Wi‑Fi setup described in the [Quick Start](#
 | Page | Purpose |
 |---|---|
 | `setup.html` | First‑boot wizard: choose AP vs. STA, scan and join a network |
-| `index.html` | Dashboard: CPU family / base clock with APPLY, throttle readout and slider, presets, VCORE/VTT graphs, device controls |
+| `index.html` | Dashboard: CPU family / base clock with APPLY, throttle readout and slider, presets, VCORE/VTT graphs, device controls (layout and styles) |
+| `dashboard.js` | Everything the dashboard does: API calls, live updates, APPLY, slider, presets |
+| `hawk370.css` / `hawk370.js` | Shared styles (including the phone layout) and helpers for all pages |
 | `files.html` | Drag‑and‑drop firmware / storage‑image OTA and file manager for LittleFS |
 | `docs/index.html` | The web installer (GitHub Pages), not part of the firmware |
 

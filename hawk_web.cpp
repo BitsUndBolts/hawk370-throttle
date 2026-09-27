@@ -154,6 +154,7 @@ struct UploadContext {
   String finalPath;
   String tmpPath;
   bool   filesystemImage = false;
+  bool   keepRunning     = false;   // storage image with ?reboot=0: more uploads follow
 };
 
 static UploadContext otaCtx;
@@ -166,12 +167,17 @@ static void uploadFail(UploadContext& ctx, const String& msg) {
 }
 
 // Firmware (.bin) or, with ?target=fs, a LittleFS image built by mklittlefs.
+// A storage image with ?reboot=0 is mounted right away instead of restarting,
+// so the Files page can flash the web pages and then the firmware in one run
+// (one restart at the end).
 static void handleFirmwareUpload(AsyncWebServerRequest* request, const String& filename,
                                  size_t index, uint8_t* data, size_t len, bool final) {
   if (index == 0) {
     otaCtx = UploadContext{};
     otaCtx.started = true;
     otaCtx.filesystemImage = request->hasParam("target") && request->getParam("target")->value() == "fs";
+    otaCtx.keepRunning     = otaCtx.filesystemImage &&
+                             request->hasParam("reboot") && request->getParam("reboot")->value() == "0";
     Serial.printf("[OTA] %s upload started: %s\n", otaCtx.filesystemImage ? "Filesystem" : "Firmware",
                   filename.c_str());
     if (otaCtx.filesystemImage) {
@@ -209,6 +215,19 @@ static void finishFirmwareUpload(AsyncWebServerRequest* request) {
     const String msg = otaCtx.message.length() ? otaCtx.message : String(Update.errorString());
     sendStatus(request, 500, "error", msg.c_str());
     if (otaCtx.filesystemImage) webRequestReboot(1500);   // storage was unmounted
+    return;
+  }
+  if (otaCtx.keepRunning) {
+    // More uploads follow (usually the firmware): mount the new web pages
+    // and stay up; the firmware flash restarts the device at the end.
+    littlefsOk = LittleFS.begin(false);
+    if (!littlefsOk) {
+      sendStatus(request, 500, "error", "Storage image written, but it cannot be mounted");
+      webRequestReboot(1500);
+      return;
+    }
+    Serial.println("[OTA] Storage image mounted, waiting for the next upload");
+    sendStatus(request, 200, "success");
     return;
   }
   sendStatus(request, 200, "success");
